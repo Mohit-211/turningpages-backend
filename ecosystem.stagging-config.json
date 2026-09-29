@@ -1,7 +1,7 @@
 {
   "apps": [
     {
-      "name": "priority-maintanance-back-end",
+      "name": "turningpages-backend-staging",
       "script": "index.js",
       "instances": 1,
       "autorestart": true,
