@@ -1,0 +1,15 @@
+{
+  "apps": [
+    {
+      "name": "priority-maintanance-back-end",
+      "script": "index.js",
+      "instances": "max",
+      "autorestart": true,
+      "watch": false,
+      "time": true,
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  ]
+}

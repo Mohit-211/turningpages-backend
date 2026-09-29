@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime logs
+logs/
+*.log
+
+# Runtime uploads
+public/uploads/
+
+# Build / generated output
+dist/
+build/
+.next/
+coverage/
+
+# OS / editor files
+.DS_Store
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp

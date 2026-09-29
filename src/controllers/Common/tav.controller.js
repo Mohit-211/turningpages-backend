@@ -1,0 +1,16 @@
+const httpStatus = require("http-status");
+const catchAsync = require("../../utils/catchAsync");
+const responseWrapper = require("../../config/responseWrapper");
+const pick = require("../../utils/pick");
+const { tavService } = require("../../services");
+
+const runTavAnalysis = catchAsync(async (req, res) => {
+
+  const result = await tavService.runTavAnalysis(req.body.book_id);
+
+  return responseWrapper(res, result, "TAV Analysis completed successfully.");
+});
+
+module.exports = {
+  runTavAnalysis,
+};
