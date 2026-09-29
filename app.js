@@ -23,6 +23,7 @@ const bodyParser = require("body-parser");
 require("./src/models");
 
 const PUBLIC_DIR = path.resolve(__dirname, "./public");
+const STORAGE_DIR = config.STORAGE_DIR;
 
 // Security headers
 app.use(
@@ -139,15 +140,15 @@ app.delete("/api/v1/logs", async (req, res) => {
 });
 
 // Public file APIs
-app.use("/images", express.static(`${PUBLIC_DIR}/uploads/images`));
+app.use("/images", express.static(`${STORAGE_DIR}/images`));
 
-app.use("/videos", express.static(`${PUBLIC_DIR}/uploads/videos`));
+app.use("/videos", express.static(`${STORAGE_DIR}/videos`));
 
-app.use("/gifs", express.static(`${PUBLIC_DIR}/uploads/gifs`));
+app.use("/gifs", express.static(`${STORAGE_DIR}/gifs`));
 
-app.use("/docs", express.static(`${PUBLIC_DIR}/uploads/docs`));
+app.use("/docs", express.static(`${STORAGE_DIR}/docs`));
 
-app.use("/audios", express.static(`${PUBLIC_DIR}/uploads/audios`));
+app.use("/audios", express.static(`${STORAGE_DIR}/audios`));
 
 // 404 handler
 app.use((req, res, next) => {

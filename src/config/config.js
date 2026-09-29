@@ -57,6 +57,8 @@ const envVarsSchema = Joi.object()
 
         GEMINI_API_KEY: Joi.string(),
         GROK_API_KEY: Joi.string(),
+
+        STORAGE_PATH: Joi.string().description('Absolute path to uploaded files storage directory'),
     })
     .unknown();
 
@@ -129,4 +131,7 @@ module.exports = {
 
     GEMINI_API_KEY: envVars.GEMINI_API_KEY,
     GROK_API_KEY: envVars.GROK_API_KEY,
+
+    // Defaults to a "storage" folder next to the project root (e.g. /var/www/storage)
+    STORAGE_DIR: envVars.STORAGE_PATH || path.resolve(__dirname, '../../../storage'),
 };

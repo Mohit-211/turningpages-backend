@@ -19,6 +19,7 @@ const path = require("path");
 const fs = require("fs");
 const { CLIENT_RENEG_LIMIT } = require("tls");
 const sequelize = require("../../../config/central.db");
+const config = require("../../../config/config");
 
 router.post(
   "/",
@@ -580,11 +581,7 @@ Return ONLY the final image.
     const base64Image = response.data;
     const buffer = Buffer.from(base64Image, "base64");
     const fileName = `book_cover_${Date.now()}.png`;
-    const filePath = path.join(
-      __dirname,
-      "../../../../public/uploads/images",
-      fileName,
-    );
+    const filePath = path.join(config.STORAGE_DIR, "images", fileName);
     fs.writeFileSync(filePath, buffer);
 
     return res.status(200).json({
