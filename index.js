@@ -1,17 +1,17 @@
 const app = require("./app.js");
-const moment = require("moment");
+const { DateTime } = require("luxon");
 const config = require("./src/config/config.js");
 const logger = require("./src/config/logger.js");
 
 process.env.TZ = config.DEFAULT_TIMEZONE;
 
-const currentTime = moment();
+const currentTime = DateTime.now();
 
 const server = app.listen(config.port, () => {
   logger.info(
     `Server is Working Fine 😊 & Listening to PORT: ${config.port} | ` +
       `Default Timezone is: ${process.env.TZ} | ` +
-      `Current date and time: ${currentTime.format("YYYY-MM-DD HH:mm:ss")}`,
+      `Current date and time: ${currentTime.toFormat("yyyy-MM-dd HH:mm:ss")}`,
   );
 });
 

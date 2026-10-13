@@ -1,7 +1,8 @@
-const admin = require("firebase-admin");
+const { initializeApp, cert } = require("firebase-admin/app");
+const { getFirestore } = require("firebase-admin/firestore");
 
-admin.initializeApp({
-  credential: admin.credential.cert({
+const app = initializeApp({
+  credential: cert({
     projectId: process.env.FIREBASE_PROJECT_ID,
     privateKeyId: process.env.FIREBASE_PRIVATE_KEY_ID,
     privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
@@ -10,4 +11,4 @@ admin.initializeApp({
   }),
 });
 
-module.exports = { admin };
+module.exports = { firestore: getFirestore(app) };

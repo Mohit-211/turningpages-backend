@@ -1,7 +1,7 @@
 /** @format */
 
 const { Op } = require("sequelize");
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 const { Quote, QuoteTag } = require("../../models");
 const ApiError = require("../../utils/ApiError");
 

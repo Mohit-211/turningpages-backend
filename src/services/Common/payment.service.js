@@ -2,7 +2,7 @@
 
 const Stripe = require("stripe");
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 const {
 	User,
 	Payment,

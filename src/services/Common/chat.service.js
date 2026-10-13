@@ -1,6 +1,6 @@
 /** @format */
 
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 const {
 	ChatRoom,
 	ChatParticipant,
@@ -15,7 +15,7 @@ const { participantRoles } = require("../../models/chatParticipant.model");
 const ApiError = require("../../utils/ApiError");
 const sequelize = require("../../config/central.db");
 
-const { admin } = require("../../config/firebase");
+const { firestore } = require("../../config/firebase");
 const { Sequelize, Op } = require("sequelize");
 
 const createAdminUserChat = async (adminId, userId) => {
@@ -66,7 +66,6 @@ const createAdminUserChat = async (adminId, userId) => {
 };
 
 const sendMessage = async (chat_room_id, senderId, role, message) => {
-	const db = admin.firestore();
 	let roleId = "6";
 	if (role === "user") {
 		const userDoc = await User.findByPk(senderId);
@@ -84,7 +83,7 @@ const sendMessage = async (chat_room_id, senderId, role, message) => {
 		throw new ApiError(httpStatus.FORBIDDEN, "Not allowed");
 	}
 
-	const messageRef = await db
+	const messageRef = await firestore
 		.collection("messages")
 		.doc(String(chat_room_id))
 		.collection("chat")

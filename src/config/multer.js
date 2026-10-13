@@ -2,7 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const ApiError = require('../utils/ApiError');
-const httpStatus = require('http-status');
+const { status: httpStatus } = require('http-status');
 const config = require('./config');
 
 // Define base directory for uploads

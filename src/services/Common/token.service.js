@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken')
-const moment = require('moment')
+const { DateTime } = require('luxon')
 const config = require('../../config/config');
 
 const { tokenTypes } = require('../../config/types');
@@ -12,8 +12,8 @@ const generateToken = (userId, expires, type, role_id, secret = config.jwt.secre
     try {
         const payload = {
             sub: userId,
-            iat: moment().unix(),
-            exp: expires.unix(),
+            iat: DateTime.now().toUnixInteger(),
+            exp: expires.toUnixInteger(),
             type,
             role_id: role_id
         };
@@ -55,16 +55,16 @@ const generateAuthTokens = async (user) => {
             throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error: Invalid User');
         };
 
-        const accessTokenExpires = moment().add(config.jwt.accessExpirationMinutes, 'days');
+        const accessTokenExpires = DateTime.now().plus({ days: Number(config.jwt.accessExpirationMinutes) || 0 });
         const accessToken = generateToken(user.id, accessTokenExpires, tokenTypes.ACCESS, user.role_id);
 
-        let tokenDoc = await saveToken(accessToken, user.id, moment.utc(accessTokenExpires).format('YYYY-MM-DD HH:mm:ss'), tokenTypes.ACCESS, user.role_id, user.fcm_token);
+        let tokenDoc = await saveToken(accessToken, user.id, accessTokenExpires.toUTC().toFormat('yyyy-MM-dd HH:mm:ss'), tokenTypes.ACCESS, user.role_id, user.fcm_token);
 
         return {
             access: {
                 id: tokenDoc[0],
                 token: accessToken,
-                expires: accessTokenExpires.toDate(),
+                expires: accessTokenExpires.toJSDate(),
             },
             refresh: {
                 id: '',

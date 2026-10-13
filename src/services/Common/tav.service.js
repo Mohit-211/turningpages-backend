@@ -1,4 +1,4 @@
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 const ApiError = require("../../utils/ApiError");
 const { Book, Chapter, Genre, User, Profile } = require("../../models");
 const { GoogleGenAI } = require("@google/genai");

@@ -13,7 +13,7 @@ const {
   ai,
 } = require("../../../config/gemeniConfig");
 const responseWrapper = require("../../../config/responseWrapper");
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 const path = require("path");
 const fs = require("fs");
 const sequelize = require("../../../config/central.db");
