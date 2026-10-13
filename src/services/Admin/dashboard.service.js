@@ -1,4 +1,4 @@
-const httpStatus = require('http-status');
+const { status: httpStatus } = require('http-status');
 
 const { Book, User, Profile, UserAttachment, Genre } = require('../../models');
 const ApiError = require('../../utils/ApiError');

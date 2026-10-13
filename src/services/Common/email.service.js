@@ -8,7 +8,7 @@ const {
 	emailVerificationFormat,
 } = require("../../../public/Email_Template");
 const ApiError = require("../../utils/ApiError");
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 
 const transport = nodemailer.createTransport(config.email.smtp);
 

@@ -2,10 +2,10 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const compression = require("compression");
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 const path = require("path");
 const fs = require("fs");
-const moment = require("moment");
+const { DateTime } = require("luxon");
 const app = express();
 
 const config = require("./src/config/config.js");
@@ -18,7 +18,6 @@ const errorHandler = require("./src/utils/errorHandler.js");
 const responseWrapper = require("./src/config/responseWrapper");
 const handleFileUploads = require("./src/config/multer.js");
 const { paymentController } = require("./src/controllers/index.js");
-const bodyParser = require("body-parser");
 
 require("./src/models");
 
@@ -57,13 +56,19 @@ app.use(
 // Stripe webhook must receive the raw request body
 app.post(
   "/api/v1/stripe/webhook/callback",
-  bodyParser.raw({ type: "application/json" }),
+  express.raw({ type: "application/json" }),
   paymentController.stripeWebhook,
 );
 
 // Request body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Express 5 leaves req.body undefined when there is no body; the auth middleware writes to it
+app.use((req, res, next) => {
+  req.body ??= {};
+  next();
+});
 
 // Gzip compression
 app.use(compression());
@@ -102,7 +107,7 @@ app.use("/api/v1", handleFileUploads, routes);
 
 // Read current day's logs
 app.get("/api/v1/logs", (req, res) => {
-  const currentDate = moment().format("YYYY-MM-DD");
+  const currentDate = DateTime.now().toFormat("yyyy-MM-dd");
   const logFileName = `${currentDate}.log`;
   const logFilePath = path.join(__dirname, "logs", logFileName);
 

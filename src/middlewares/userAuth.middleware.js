@@ -1,6 +1,6 @@
 /** @format */
 
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 const jwt = require("jsonwebtoken");
 
 const {
@@ -18,7 +18,7 @@ const validatePassword = require("../helpers/validatePassword");
 const { tokenTypes, otpTypes } = require("../config/types");
 const catchAsync = require("../utils/catchAsync");
 const ApiError = require("../utils/ApiError");
-const randomize = require("randomatic");
+const generateOtp = require("../utils/generateOtp");
 const { sendEmailVerification } = require("../services/Common/email.service");
 
 const config = require("../config/config");
@@ -76,7 +76,7 @@ const validateRegisterUserBody = catchAsync(async (req, res, next) => {
 					},
 				});
 				if (existingOtp) await existingOtp.destroy({ force: true });
-				const generatedOTP = randomize("0", 4);
+				const generatedOTP = generateOtp(4);
 				const otpObj = {
 					user_id: userDoc.id,
 					email: email,

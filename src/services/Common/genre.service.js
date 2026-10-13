@@ -1,5 +1,4 @@
-const httpStatus = require('http-status');
-const moment = require('moment')
+const { status: httpStatus } = require('http-status');
 
 const { Genre } = require('../../models');
 const ApiError = require('../../utils/ApiError');
@@ -11,7 +10,7 @@ const createGenre = async (reqBody) => {
         }
         const genreObj = {
             title: reqBody.title,
-            created_at: moment()
+            created_at: new Date()
         };
         const genreDoc = await Genre.create(genreObj);
         if (!genreDoc) {

@@ -1,6 +1,6 @@
 /** @format */
 
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 const { Sequelize, Op } = require("sequelize");
 const sequelize = require("../../config/central.db");
 const {

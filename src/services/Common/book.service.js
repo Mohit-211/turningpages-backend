@@ -1,6 +1,6 @@
 /** @format */
 
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 const { Op } = require("sequelize");
 const axios = require("axios");
 

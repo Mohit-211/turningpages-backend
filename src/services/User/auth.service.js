@@ -1,9 +1,9 @@
 /** @format */
 
-const httpStatus = require("http-status");
+const { status: httpStatus } = require("http-status");
 const bcrypt = require("bcryptjs");
-const randomize = require("randomatic");
-const moment = require("moment");
+const generateOtp = require("../../utils/generateOtp");
+const { DateTime } = require("luxon");
 const {
 	OTP,
 	User,
@@ -41,7 +41,7 @@ const sendOTP = async (body, headers) => {
 			where: { email: body?.email, type: body?.type, role_id: role_id },
 		});
 		if (existingOtp) await existingOtp.destroy({ force: true });
-		const generatedOTP = randomize("0", 4);
+		const generatedOTP = generateOtp(4);
 		const otpObj = {
 			email: email,
 			code: generatedOTP,
@@ -177,7 +177,7 @@ const register = async (body, headers) => {
 			},
 		});
 		if (existingOtp) await existingOtp.destroy({ force: true });
-		const generatedOTP = randomize("0", 4);
+		const generatedOTP = generateOtp(4);
 		const otpObj = {
 			user_id: user.id,
 			email: email,
@@ -326,7 +326,7 @@ const login = async (reqBody, headers) => {
 				},
 			});
 			if (existingOtp) await existingOtp.destroy({ force: true });
-			const generatedOTP = randomize("0", 4);
+			const generatedOTP = generateOtp(4);
 			const otpObj = {
 				user_id: user.id,
 				email: user.email,
@@ -473,8 +473,8 @@ const logout = async (reqBody, headers) => {
 
 const saveLoginTiming = async (user, token, reqBody, timezone) => {
 	try {
-		const loginTimeUTC = moment.utc();
-		const loginTimeLocal = moment.tz(loginTimeUTC, timezone);
+		const loginTimeUTC = DateTime.utc();
+		const loginTimeLocal = loginTimeUTC.setZone(timezone);
 
 		const timeZoneDoc = await Timezone.findOne({
 			where: { time_zone: timezone, is_active: true },
@@ -483,8 +483,8 @@ const saveLoginTiming = async (user, token, reqBody, timezone) => {
 		let obj = {
 			user_id: user.id,
 			role_id: user.role_id,
-			login_time_utc: loginTimeUTC,
-			login_time_local: loginTimeLocal.format("YYYY-MM-DD hh:mm:ss"),
+			login_time_utc: loginTimeUTC.toJSDate(),
+			login_time_local: loginTimeLocal.toFormat("yyyy-MM-dd hh:mm:ss"),
 			ip_address: reqBody.ip_address,
 			token_id: token.access.id,
 			time_zone: timeZoneDoc.id,
@@ -502,15 +502,15 @@ const saveLoginTiming = async (user, token, reqBody, timezone) => {
 
 const saveLogoutTiming = async (tokenDoc, timezone) => {
 	try {
-		const logoutTimeUTC = moment.utc();
-		const logoutTimeLocal = moment.tz(logoutTimeUTC, timezone);
+		const logoutTime = new Date();
 
 		let loginTimingDocDoc = await userLoginTiming.findOne({
 			where: { token_id: tokenDoc.id },
 		});
 		if (loginTimingDocDoc) {
-			loginTimingDocDoc.logout_time_utc = logoutTimeUTC;
-			loginTimingDocDoc.logout_time_local = logoutTimeLocal;
+			loginTimingDocDoc.logout_time_utc = logoutTime;
+			// Same instant as before: Sequelize always stored the zoned moment value in UTC
+			loginTimingDocDoc.logout_time_local = logoutTime;
 			await loginTimingDocDoc.save();
 			return loginTimingDocDoc;
 		}
