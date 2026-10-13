@@ -225,7 +225,6 @@ const login = async (reqBody, headers) => {
 	await saveLoginTiming(user, token, reqBody.ip_address, headers.timezone);
 
 	delete token.access.id;
-	delete token.refresh.id;
 	return {
 		id: user.id,
 		name: user.user_profile?.name,
