@@ -265,10 +265,18 @@ const stripeWebhook = async (body, headers) => {
   }
 
   try {
-    const data = event.data.object;
+console.log("STRIPE EVENT TYPE:", event?.type);
+console.log("STRIPE EVENT DATA:", JSON.stringify(event?.data, null, 2));
 
-    console.log(data, "datatttttttttttttttttttttttttttt");
-    console.log(event.type, "event.type======================");
+if (!event?.data?.object) {
+  console.log("Stripe event has no data.object:", event?.type);
+  return { received: true };
+}
+
+const data = event.data.object;
+
+console.log(data, "datatttttttttttttttttttttttttttt");
+console.log(event.type, "event.type======================");
 
     switch (event.type) {
       case "payment_intent.payment_failed": {

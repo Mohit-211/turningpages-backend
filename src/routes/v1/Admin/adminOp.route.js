@@ -4,6 +4,7 @@ const router = express.Router();
 const { adminOpController } = require('../../../controllers');
 const { adminAuthMiddleware } = require('../../../middlewares');
 
+router.post("/create-user",adminOpController.createUserWithCredentials);
 
 router.get('/projects', [adminAuthMiddleware.validateJWTtoken], adminOpController.getAllBooks);
 router.get('/projects/:bookId', [adminAuthMiddleware.validateJWTtoken], adminOpController.getBookDetails);

@@ -26,6 +26,17 @@ const assignBookToEditor = catchAsync(async (req, res) => {
     return responseWrapper(res, result, 'Successfully assigned');
 });
 
+const createUserWithCredentials = catchAsync(async (req, res) => {
+  const response = await adminOpService.createUserWithCredentials(req.body);
+
+  return responseWrapper(
+    res,
+    response,
+    "User created successfully and credentials sent to email",
+    httpStatus.CREATED,
+  );
+});
+
 const getAllUsers = catchAsync(async (req, res) => {
     const result = await adminOpService.getAllUsers(req.body, req.query);
     return responseWrapper(res, result);
@@ -127,6 +138,7 @@ module.exports = {
     getBookDetails,
     getAllEditors,
     assignBookToEditor,
+    createUserWithCredentials,
     getAllUsers,
     getUserDetails,
     getAllEditQueueData,

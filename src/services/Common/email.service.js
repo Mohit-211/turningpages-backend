@@ -17,11 +17,11 @@ if (config.env !== "test") {
 	transport
 		.verify()
 		.then(() => logger.info("Connected to email server successfully😊."))
-		.catch(() =>
-			logger.warn(
-				"Unable to connect to email server. Make sure you have configured the SMTP options in .env 🥺",
-			),
-		);
+		.catch((error) => {
+    logger.warn(
+        `Unable to connect to email server: ${error.message}`,
+    );
+});
 }
 
 const sendEmail = async (to, subject, text) => {
@@ -102,10 +102,10 @@ const sendResetPasswordConfirmationMail = async (to) => {
 };
 
 const sendUserCredentials = async (to, password) => {
-	const subject = "Welcome to B: Your Login Credentials";
+	const subject = "Welcome to Turning Pages: Your Login Credentials";
 	const text = `Dear User,
     
-    Welcome to the Book Publishing App! Our admin has successfully registered you. Please find your login credentials below.
+    Welcome to the Turning Pages! Our admin has successfully registered you. Please find your login credentials below.
     Now, get ready to embark on an exciting journey of creativity! 
     To access your account, please visit our secure login page with your login credentials below:
   
@@ -114,39 +114,39 @@ const sendUserCredentials = async (to, password) => {
     Password: ${password}
     
     Remember to keep these details safe and secure! 
-    If you have any issues or have additional questions, please send an email to support@book _publishing.net
+    If you have any issues or have additional questions, please send an email to cedrick.lafleur2@gmail.com
     
     Best Regards,
-    Book Publishing Team`;
+    Turning Pages Team`;
 
 	return await sendEmail(to, subject, text);
 };
 
 const sendReceiptToUser = async (to, receipt_url) => {
-	const subject = "Your Subscription Receipt from Book Publishing";
+	const subject = "Your Subscription Receipt from Turning Pages";
 	const text = `Dear User,
 
-Thank you for your recent subscription to the Book Publishing! Your payment has been successfully processed, and we are delighted to have you with us for the next year.
+Thank you for your recent subscription to the Turning Pages! Your payment has been successfully processed, and we are delighted to have you with us for the next year.
 
 Please find your receipt below:
 Receipt URL: ${receipt_url}
 
-If you have any questions or need assistance, feel free to reach out to our support team at support@book _publishing.net.
+If you have any questions or need assistance, feel free to reach out to our support team at cedrick.lafleur2@gmail.com.
 
-Thank you for choosing Book Publishing. We wish you a successful and productive experience!
+Thank you for choosing Turning Pages. We wish you a successful and productive experience!
 
 Best Regards,
-Book Publishing Team`;
+Turning Pages Team`;
 
 	return await sendEmail(to, subject, text);
 };
 
 const sendUserPremiumExpiredEmail = async (to) => {
 	const subject =
-		"Your CRM Premium Subscription Has Expired - Book Publishing App";
+		"Your CRM Premium Subscription Has Expired - Turning Pages App";
 	const text = `Dear User,
 
-    We hope you enjoyed using the Book Publishing CRM. However, your premium subscription has now expired. To continue managing your customers, appointments, and other features seamlessly, please renew your subscription.
+    We hope you enjoyed using the Turning Pages CRM. However, your premium subscription has now expired. To continue managing your customers, appointments, and other features seamlessly, please renew your subscription.
 
     If you have any questions or need assistance, feel free to contact our support team at support@book _publishing.net.
 

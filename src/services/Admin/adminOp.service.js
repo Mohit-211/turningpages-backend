@@ -20,10 +20,12 @@ const {
   ChatParticipant,
   UserCreditTransaction,
 } = require("../../models");
+const bcrypt = require("bcryptjs");
 const ApiError = require("../../utils/ApiError");
 const { bookStatus, userStatusTypes } = require("../../config/types");
 const { createBookChat } = require("../Common/chat.service");
 const { participantRoles } = require("../../models/chatParticipant.model");
+const { sendUserCredentials } = require("../Common/email.service");
 
 const getAllBooks = async (body, query) => {
   try {
@@ -449,6 +451,81 @@ const assignBookToEditor = async (body) => {
 
     return "Editor assigned successfully";
   } catch (error) {
+    throw new ApiError(
+      error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
+      error.message,
+    );
+  }
+};
+
+const createUserWithCredentials = async (body) => {
+  const t = await sequelize.transaction();
+  try {
+    const { name, email, password } = body;
+
+    if (!name?.trim() || !email || !password) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "Name, email and password are required",
+      );
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
+
+    const existingUser = await User.findOne({
+      where: { email: normalizedEmail, is_active: true, role_id: 6 },
+      transaction: t,
+    });
+
+    if (existingUser) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "User with this email already exists",
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await User.create(
+      {
+        email: normalizedEmail,
+        password: hashedPassword,
+        status: "ACCEPTED",
+        is_active: true,
+        role_id: 6,
+      },
+      { transaction: t },
+    );
+
+    // Save the name in the profile table (this is what user_profile.name reads)
+    await Profile.create(
+      {
+        user_id: newUser.id,
+        name: trimmedName,
+      },
+      { transaction: t },
+    );
+
+    await t.commit();
+
+    // Send email after commit, so a mail failure doesn't roll back the user
+    try {
+      await sendUserCredentials(normalizedEmail, password);
+    } catch (mailErr) {
+      console.error("Credentials email failed:", mailErr.message);
+    }
+
+    return {
+      id: newUser.id,
+      name: trimmedName,
+      email: newUser.email,
+      password,
+      status: newUser.status,
+      is_active: newUser.is_active,
+    };
+  } catch (error) {
+    if (!t.finished) await t.rollback();
     throw new ApiError(
       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
       error.message,
@@ -1445,6 +1522,7 @@ module.exports = {
   getAllEditors,
   assignBookToEditor,
   getAllUsers,
+  createUserWithCredentials,
   getUserDetails,
   getUserDetails,
   getAllEditQueueData,
