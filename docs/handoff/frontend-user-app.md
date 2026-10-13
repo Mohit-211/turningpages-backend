@@ -8,7 +8,15 @@ endpoints: `/api/v1`. Auth header is unchanged: `x-access-token: <token>`.
 
 - **Phone number is optional.** Remove the "required" validation from the phone field. Send `mobile` only
   when the user fills it in. `POST /user/auth/register` body: `name`, `last_name` (optional), `email`,
-  `mobile` (optional), `password`, `confirm_password`.
+  `mobile` (optional), `password`, `confirm_password`, `captcha` (required, see below).
+- **reCAPTCHA is now verified by the backend.** Make the widget required and send its token as `captcha`.
+  Both v2 (checkbox) and v3 tokens work. New errors:
+  - 400 `Please complete the captcha.`: no `captcha` in the body
+  - 400 `Captcha verification failed. Please try again.`: invalid or expired token, or a v3 score that is
+    too low. Reset the widget (`grecaptcha.reset()`) so the user can try again; a token works only once.
+  - 503 `Could not verify the captcha. Please try again.`: Google could not be reached
+
+  The site key in the app must belong to the same reCAPTCHA key pair as the backend's secret key.
 - **Stop sending the `role_id` header** on any `/user/auth/*` request. It is now ignored; every sign-up is a
   regular user.
 - Password rules are unchanged: at least 8 characters, at least 2 digits, no spaces.
@@ -57,6 +65,9 @@ Changes:
 - `data.role_id` in the login response is now a **number** (it used to echo the header as a string).
 - The `timezone` header is optional. Keep sending it (e.g. `Intl.DateTimeFormat().resolvedOptions().timeZone`)
   for login history, but login no longer fails without it.
+- **`data.tokens.refresh` is removed.** `data.tokens` now has only `access` (`{ token, expires }`). There is
+  no refresh endpoint. When the token expires (after `JWT_ACCESS_EXPIRATION_DAYS`), requests return 401
+  and the user logs in again, which the app already handles.
 
 ## 6. Change password (logged in)
 
@@ -110,3 +121,27 @@ and TAV. Changes that affect the UI:
   endpoint returns **502** `The image model did not return a cover. Please try again.` Show the message and
   let the user retry or rephrase the creative direction.
 - Generated chapter text may read slightly differently from before (new model). No code change needed.
+
+## 11. Answers to the user app's questions
+
+1. **Chapter generation no longer overwrites the chapter.** `POST /chapters/generate/chapter/content`
+   does not write to the chapter anymore. It only streams the reply and charges 0.25 credit. The user keeps
+   **Insert into Editor** and saves with `PATCH /chapters` as now.
+   **Keep sending `context`:** the endpoint now uses it as the chapter text so far and continues from
+   where it ends. Send the editor's plain text or HTML (tags are stripped). Only the **last 12,000
+   characters** are used. Without `context`, the saved chapter text is used. SSE event shapes are
+   unchanged: `{ token }` chunks, then `{ type: "final", token: <full reply> }`, then `[DONE]`;
+   `{ type: "error", token: <message> }` on failure.
+2. **Grammar check: remove the feature.** There is no grammar service and none is planned. Remove the
+   `POST /grammar/check` call and its UI.
+3. **Port 9090 / proxy:** everything goes through 443 at `https://api.turningpages.io/api/v1/`, and images
+   at `https://api.turningpages.io/images/`. The generation endpoint now sends
+   `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`, so nginx and the compression
+   middleware don't buffer the stream. The server owner confirms the proxy rules and that the app's
+   production origin is in the CORS list. (The variable is `ACCESSDOMAINS`, not `ACCESS_DOMAINS`.) The
+   stale `:9090` comment is removed.
+4. **reCAPTCHA:** verified now. Send it as `captcha` and make it required (see section 1).
+5. **Refresh token:** removed from login and change-password responses (see section 5). No refresh
+   endpoint is planned.
+
+Noted: the app's handling of `final` (replace, not append), `error`, and `[DONE]` matches the backend.

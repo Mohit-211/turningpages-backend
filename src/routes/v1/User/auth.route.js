@@ -6,7 +6,7 @@ const { userAuthMiddleware } = require('../../../middlewares');
 
 router.post('/otp', userAuthController.sendOTP);
 router.post('/verify-otp', userAuthController.verifyOTP);
-router.post('/register', [userAuthMiddleware.validateRegisterUserBody], userAuthController.register);
+router.post('/register', [userAuthMiddleware.validateRegisterUserBody, userAuthMiddleware.verifyCaptcha], userAuthController.register);
 
 router.post('/login', [userAuthMiddleware.validateSignInReqBody], userAuthController.login);
 router.post('/reset-password', [userAuthMiddleware.verifyAuthJWTToken, userAuthMiddleware.validateResetPassordBody], userAuthController.resetPassword);

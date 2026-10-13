@@ -61,6 +61,38 @@ const validateRegisterUserBody = catchAsync(async (req, res, next) => {
 	next();
 });
 
+// Verifies the Google reCAPTCHA token sent as `captcha`. Works for v2 (checkbox) and v3 tokens;
+// v3 responses carry a score, which must meet RECAPTCHA_MIN_SCORE.
+const verifyCaptcha = catchAsync(async (req, res, next) => {
+	const { captcha } = req.body;
+	if (!captcha) {
+		return responseWrapper(res, "", "Please complete the captcha.", httpStatus.BAD_REQUEST);
+	}
+
+	let result;
+	try {
+		const response = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+			method: "POST",
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				secret: config.recaptcha.secretKey,
+				response: String(captcha),
+				remoteip: req.ip,
+			}),
+			signal: AbortSignal.timeout(10000),
+		});
+		result = await response.json();
+	} catch (error) {
+		throw new ApiError(httpStatus.SERVICE_UNAVAILABLE, "Could not verify the captcha. Please try again.");
+	}
+
+	const scoreOk = typeof result.score !== "number" || result.score >= config.recaptcha.minScore;
+	if (!result.success || !scoreOk) {
+		return responseWrapper(res, "", "Captcha verification failed. Please try again.", httpStatus.BAD_REQUEST);
+	}
+	next();
+});
+
 const validateSignInReqBody = catchAsync(async (req, res, next) => {
 	const { email, password } = req.body;
 
@@ -213,6 +245,7 @@ const validateResetPassordBody = catchAsync(async (req, res, next) => {
 
 module.exports = {
 	validateRegisterUserBody,
+	verifyCaptcha,
 	authenticateUser,
 	verifyAuthJWTToken,
 	validateResetPassordBody,

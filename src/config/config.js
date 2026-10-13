@@ -29,6 +29,8 @@ const envVarsSchema = Joi.object()
         OTP_MAX_ATTEMPTS: Joi.number().integer().positive().default(5).description('wrong guesses allowed before an OTP is invalidated'),
         OTP_RESEND_COOLDOWN_SECONDS: Joi.number().integer().min(0).default(60).description('minimum seconds between OTP emails to the same address'),
         PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES: Joi.number().integer().positive().default(15).description('minutes a verified password-reset token stays valid'),
+        RECAPTCHA_SECRET_KEY: Joi.string().required().description('Google reCAPTCHA secret key, used to verify sign-ups'),
+        RECAPTCHA_MIN_SCORE: Joi.number().min(0).max(1).default(0.5).description('minimum reCAPTCHA v3 score (ignored for v2 tokens)'),
         AUTH_RATE_LIMIT_MAX: Joi.number().integer().positive().default(20).description('failed auth requests allowed per IP per 15 minutes'),
 
         SMTP_HOST: Joi.string().required().description('server that will send the emails'),
@@ -117,6 +119,10 @@ module.exports = {
         resetTokenExpirationMinutes: envVars.PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES,
     },
     authRateLimitMax: envVars.AUTH_RATE_LIMIT_MAX,
+    recaptcha: {
+        secretKey: envVars.RECAPTCHA_SECRET_KEY,
+        minScore: envVars.RECAPTCHA_MIN_SCORE,
+    },
     email: {
         smtp: {
             host: envVars.SMTP_HOST,

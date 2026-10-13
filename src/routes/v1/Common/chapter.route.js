@@ -25,6 +25,9 @@ const fs = require("fs");
 const sequelize = require("../../../config/central.db");
 const config = require("../../../config/config");
 
+// Characters of the current chapter text included in the generation prompt (about 3k tokens)
+const CURRENT_TEXT_MAX_CHARS = 12000;
+
 router.post(
   "/",
   [userAuthMiddleware.verifyAuthJWTToken],
@@ -50,7 +53,7 @@ const generateChapterContent = async (req, res) => {
   let transaction;
   try {
     const { user } = req.body;
-    const { chapter_id, instruction = "", words_count = 1000 } = req.body;
+    const { chapter_id, instruction = "", words_count = 1000, context = "" } = req.body;
 
     if (!chapter_id || !instruction?.trim()) {
       return responseWrapper(
@@ -148,6 +151,15 @@ const generateChapterContent = async (req, res) => {
       contextText += `### THIS IS THE FIRST CHAPTER\n`;
     }
 
+    // The AI continues from the editor's current text (sent as `context`, possibly unsaved),
+    // falling back to the saved chapter. Only the end is sent, to keep the prompt bounded.
+    const currentText = String(context || chapterDoc.content || "")
+      .replace(/<[^>]*>/g, " ")
+      .trim();
+    if (currentText) {
+      contextText += `\n### CURRENT CHAPTER SO FAR (continue from where this ends)\n${currentText.slice(-CURRENT_TEXT_MAX_CHARS)}\n`;
+    }
+
     // ==================== FINAL UNIVERSAL PROMPT ====================
     const basePrompt = `
 You are a professional author writing a high-quality ${genreName} book.
@@ -180,6 +192,7 @@ ${instruction}
 - Maintain strict continuity for injuries, timelines, locations, evidence, and character knowledge.
 - Do not include markdown headings, chapter titles, labels, or formatting symbols like #, ##, ###, *, or bullet points unless explicitly requested.
 - Trust subtext and observable behavior instead of overexplaining.
+- If CURRENT CHAPTER SO FAR is given, continue from where it ends. Do not repeat or rewrite it.
 
 - Output only the chapter content. Nothing else.
 
@@ -198,10 +211,13 @@ Write at least ${words_count} words. Do not stop early. Keep writing until you c
       },
     });
 
-    // SSE
+    // SSE. "no-transform" stops the compression middleware from buffering events, and
+    // X-Accel-Buffering stops nginx from buffering them.
     res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
 
     let finalReply = "";
 
@@ -213,14 +229,9 @@ Write at least ${words_count} words. Do not stop early. Keep writing until you c
       }
     }
 
+    // The reply is not saved to the chapter: the app inserts it into the editor and saves
+    // through PATCH /chapters. The credit is charged once a non-empty reply is delivered.
     if (finalReply.trim()) {
-      const actualWords = finalReply.split(/\s+/).length;
-
-      await chapterDoc.update({
-        content: finalReply,
-        word_count: actualWords,
-      });
-
       await transaction.commit();
       transaction = null;
 
@@ -362,7 +373,6 @@ Return ONLY the final image.
       success: true,
       message: "Book cover generated successfully.",
       fileName,
-      // https://api.turningpages.io:9090/images/book_cover_1765433209487.png
     });
   } catch (error) {
     console.error("Error generating book cover:", error.message);
