@@ -11,13 +11,11 @@ const { Chapter, Book, Genre, User, UserCreditSpending } = require("../../../mod
 const {
   systemInstructionForChapter,
   ai,
-  systemInstructionForCoverImage,
 } = require("../../../config/gemeniConfig");
 const responseWrapper = require("../../../config/responseWrapper");
 const httpStatus = require("http-status");
 const path = require("path");
 const fs = require("fs");
-const { CLIENT_RENEG_LIMIT } = require("tls");
 const sequelize = require("../../../config/central.db");
 const config = require("../../../config/config");
 
@@ -259,260 +257,6 @@ Write at least ${words_count} words. Do not stop early. Keep writing until you c
   }
 };
 
-// const generateChapterContent = async (req, res) => {
-//   try {
-//     const {
-//       chapter_id,
-//       instruction = "",
-//       context = "", // ✅ user can pass
-//       words_count = 1000,
-//     } = req.body;
-
-//     if (!chapter_id || !instruction) {
-//       return responseWrapper(
-//         res,
-//         null,
-//         "Please provide required fields: chapter_id, instruction.",
-//         httpStatus.BAD_REQUEST,
-//       );
-//     }
-
-//     // 🔹 Get chapter
-//     const chapterDoc = await Chapter.findOne({ where: { id: chapter_id } });
-//     if (!chapterDoc) {
-//       return responseWrapper(res, null, "Chapter not found.", httpStatus.BAD_REQUEST);
-//     }
-
-//     // 🔹 Get book (for genre)
-//     const bookDoc = await Book.findByPk(chapterDoc.book_id);
-//     if (!bookDoc) {
-//       return responseWrapper(res, null, "Book not found.", httpStatus.BAD_REQUEST);
-//     }
-
-//     // 🔹 Get previous chapter
-//     const lastChapter = await Chapter.findOne({
-//       where: {
-//         book_id: chapterDoc.book_id,
-//         id: { [Op.lt]: chapter_id },
-//       },
-//       order: [["id", "DESC"]],
-//     });
-
-//     // ✅ CONTEXT PRIORITY LOGIC
-//     let finalContext = "";
-
-//     if (context && context.trim()) {
-//       finalContext = context;
-//     } else if (lastChapter?.content) {
-//       finalContext = lastChapter.content;
-//     } else {
-//       finalContext = `
-// This is the beginning of the story.
-// Introduce the main character, setting, and tone naturally.
-// `;
-//     }
-
-//     // 🔥 FINAL PROMPT
-//     const basePrompt = `
-// You are a professional fiction author writing a novel.
-
-// ### BOOK DETAILS
-// Title: ${bookDoc.title}
-// Genre: ${bookDoc.genre}
-
-// ### CURRENT CHAPTER
-// Chapter Title: ${chapterDoc.title}
-
-// ### CONTEXT
-// ${finalContext}
-
-// ### WRITING INSTRUCTION (IMPORTANT - FOLLOW THIS STRICTLY)
-// ${instruction}
-
-// ### RULES
-// - Follow the genre strictly (${bookDoc.genre})
-// - Maintain continuity with the context
-// - Use immersive storytelling (no summaries)
-// - Include dialogue where appropriate
-// - Show emotions, don’t just tell
-// - Keep characters consistent
-// - Avoid repetition
-// - Do NOT explain the story — write it
-
-// ### OUTPUT
-// Write approximately ${words_count} words of high-quality story content.
-// `;
-
-//     // 🔹 Gemini call
-//     const response = await ai.models.generateContentStream({
-//       model: "gemini-2.5-flash",
-//       contents: basePrompt,
-//       config: {
-//         thinkingBudget: 0,
-//         systemInstruction: systemInstructionForChapter,
-//         temperature: 0.9,
-//         topP: 0.9,
-//       },
-//     });
-
-//     let finalReply = "";
-
-//     // 🔹 SSE setup
-//     res.setHeader("Content-Type", "text/event-stream");
-//     res.setHeader("Cache-Control", "no-cache");
-//     res.setHeader("Connection", "keep-alive");
-//     res.flushHeaders();
-
-//     for await (const chunk of response) {
-//       const delta = chunk.text;
-
-//       if (delta) {
-//         finalReply += delta;
-
-//         res.write(`data: ${JSON.stringify({ token: delta })}\n\n`);
-//       }
-//     }
-
-//     console.log("\n===== FINAL OUTPUT =====\n", finalReply);
-
-//     // 🔹 Save content
-//     if (finalReply) {
-//       await chapterDoc.update({ content: finalReply });
-
-//       res.write(
-//         `data: ${JSON.stringify({ type: "final", token: finalReply })}\n\n`,
-//       );
-//     }
-
-//     res.write(`data: [DONE]\n\n`);
-//     res.end();
-
-//   } catch (error) {
-//     console.error("Error generating chapter content:", error);
-
-//     if (!res.headersSent) {
-//       return responseWrapper(
-//         res,
-//         null,
-//         "Failed to generate chapter content.",
-//         httpStatus.INTERNAL_SERVER_ERROR,
-//       );
-//     } else {
-//       res.write(
-//         `data: ${JSON.stringify({
-//           type: "error",
-//           token: "Sorry, I am unable to process your query!",
-//         })}\n\n`,
-//       );
-//       res.end();
-//     }
-//   }
-// };
-
-// const generateChapterContent = async (req, res) => {
-//   try {
-//     const {
-//       user,
-//       chapter_id,
-//       instruction = "",
-//       words_count = 1000,
-//       context = "",
-//     } = req.body;
-
-//     if (!chapter_id || !instruction) {
-//       return responseWrapper(
-//         res,
-//         null,
-//         "Please provide required fields: title, book_id, chapter_id, instruction.",
-//         httpStatus.BAD_REQUEST,
-//       );
-//     }
-
-//     const chapterDoc = await Chapter.findOne({ where: { id: chapter_id } });
-//     if (!chapterDoc) {
-//       return responseWrapper(
-//         res,
-//         null,
-//         "Chapter not found.",
-//         httpStatus.BAD_REQUEST,
-//       );
-//     }
-
-//     const basePrompt = `
-//             You are a professional book writer.
-//             Current chapter title: ${chapterDoc.title}
-//             For each section, write content that is:
-//                 - Human - like and emotionally engaging
-//                 - Logically flowing and coherent
-//                 - Around { words_per_section } words
-//                 - Consistent with previous sections and context(if provided)
-//                 - Includes rich descriptions, dialogues, or character thoughts if relevant
-//             ${
-//               context
-//                 ? `Previous context from earlier writing:\n${context}\n`
-//                 : "No prior context provided. This is a fresh start."
-//             }
-//             User's writing instruction: ${instruction || "Continue naturally."}
-//             Please write approximately ${words_count} words of new, high-quality book content
-//             that feels human-written, emotionally engaging, and professionally structured.
-//             Maintain logical flow, continuity, and narrative consistency.
-//         `;
-
-//     const response = await ai.models.generateContentStream({
-//       model: "gemini-2.5-flash", // gemini-2.5-pro
-//       contents: basePrompt,
-//       config: {
-//         thinkingBudget: 0,
-//         systemInstruction: systemInstructionForChapter,
-//         temperature: 0.8,
-//         topP: 0.9,
-//       },
-//     });
-
-//     let finalReply = "";
-//     res.setHeader("Content-Type", "text/event-stream");
-//     res.setHeader("Cache-Control", "no-cache");
-//     res.setHeader("Connection", "keep-alive");
-//     res.flushHeaders();
-//     for await (const chunk of response) {
-//       let delta = chunk.text;
-
-//       if (delta) {
-//         finalReply += delta;
-
-//         console.log(delta);
-
-//         res.write(`data: ${JSON.stringify({ token: delta })}\n\n`);
-//       }
-//     }
-//     console.log("\n\n===== FINAL OUTPUT =====\n");
-//     console.log(finalReply);
-//     if (finalReply) {
-//       res.write(
-//         `data: ${JSON.stringify({ type: "final", token: finalReply })}\n\n`,
-//       );
-//     }
-
-//     res.write(`data: [DONE]\n\n`);
-//     res.end();
-//   } catch (error) {
-//     console.error("Error generating chapter content:", error);
-//     if (!res.headersSent) {
-//       return responseWrapper(
-//         res,
-//         null,
-//         "Failed to generate chapter content.",
-//         httpStatus.INTERNAL_SERVER_ERROR,
-//       );
-//     } else {
-//       res.write(
-//         `data: ${JSON.stringify({ type: "error", token: "Sorry, I am unable to process your query!" })}\n\n`,
-//       );
-//       res.end();
-//     }
-//   }
-// };
-
 const generateBookCover = async (req, res) => {
   try {
     const {
@@ -573,10 +317,6 @@ Return ONLY the final image.
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-image", // works for images
       contents: prompt,
-      // config: {
-      //     systemInstruction: systemInstructionForCoverImage,
-      // },
-      // size: size
     });
     const base64Image = response.data;
     const buffer = Buffer.from(base64Image, "base64");
@@ -636,7 +376,6 @@ router.get(
 // admin apis
 
 router.post("/create/admin", chapterController.createChapterAdmin);
-router.get("/:chapterId", chapterController.getChapterByIdAdmin);
 router.patch("/update/admin", chapterController.updateChapterAdmin);
 router.delete("/remove/admin/:id", chapterController.removeChapterAdmin);
 

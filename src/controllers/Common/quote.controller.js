@@ -62,14 +62,6 @@ const getQuotesByTag = catchAsync(async (req, res) => {
 	return responseWrapper(res, data, "Quotes fetched", httpStatus.OK);
 });
 
-const incrementReqCount = catchAsync(async (req, res) => {
-	const { quote_id } = req.params;
-
-	await quoteService.incrementReqCount(quote_id);
-
-	return responseWrapper(res, null, "Count incremented", httpStatus.OK);
-});
-
 const getAllTags = catchAsync(async (req, res) => {
 	const query = pick(req.query, ["page", "limit", "search", "sort"]);
 
@@ -109,7 +101,6 @@ module.exports = {
 	getQuotes,
 	getQuoteById,
 	getQuotesByTag,
-	incrementReqCount,
 	getAllTags,
 	createTag,
 	updateTag,

@@ -1,4 +1,3 @@
-const httpStatus = require('http-status');
 const catchAsync = require('../../utils/catchAsync');
 const { paymentService } = require('../../services/Common');
 const responseWrapper = require('../../config/responseWrapper');

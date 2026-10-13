@@ -10,7 +10,6 @@ const {
 	Profile,
 	userLoginTiming,
 	Timezone,
-	Admin,
 } = require("../../models");
 const validateEmail = require("../../helpers/validateEmail");
 const ApiError = require("../../utils/ApiError");
@@ -22,7 +21,6 @@ const {
 const { generateAuthTokens } = require("../Common/token.service");
 const { otpTypes, userStatusTypes } = require("../../config/types");
 const generateRandomString = require("../../utils/randomStringGenrate");
-const { createAdminUserChat } = require("../Common/chat.service");
 const config = require("../../config/config");
 
 const sendOTP = async (body, headers) => {

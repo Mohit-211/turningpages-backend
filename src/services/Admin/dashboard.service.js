@@ -1,7 +1,6 @@
 const httpStatus = require('http-status');
-const { Sequelize } = require('sequelize');
 
-const { Book, User, Profile, UserAttachment, Genre, Chapter, Admin, Role, Department, AssignBookEditor, } = require('../../models');
+const { Book, User, Profile, UserAttachment, Genre } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const { bookStatus, userStatusTypes } = require('../../config/types');
 const { Op } = require("sequelize");

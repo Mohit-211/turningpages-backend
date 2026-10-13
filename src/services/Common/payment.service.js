@@ -4,15 +4,11 @@ const Stripe = require("stripe");
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const httpStatus = require("http-status");
 const {
-  Chapter,
-  Genre,
-  Book,
-  User,
-  Payment,
-  UserCreditSpending,
-  BookSubmissionRequest,
-  Profile,
-  UserSubscription,
+	User,
+	Payment,
+	UserCreditSpending,
+	Profile,
+	UserSubscription,
 } = require("../../models");
 const ApiError = require("../../utils/ApiError");
 const config = require("../../config/config");
@@ -24,141 +20,6 @@ const PACKAGE_PRICES = {
   pro_author: 99,
   studio: 179,
 };
-
-// const getStripePaymentIntent = async (body) => {
-// 	try {
-// 		const { amount, credit, user, payment_for, book_submission_id } = body;
-
-// 		if (amount === undefined || payment_for === undefined) {
-// 			throw new ApiError(
-// 				httpStatus.BAD_REQUEST,
-// 				"Please provide required fields: amount and payment_for",
-// 			);
-// 		}
-// 		if (Number.isNaN(Number(amount)) || amount <= 0) {
-// 			throw new ApiError(
-// 				httpStatus.BAD_REQUEST,
-// 				"amount must be valid numbers or positive integers",
-// 			);
-// 		}
-// 		if (!["book_submission", "buy_credit"].includes(payment_for)) {
-// 			throw new ApiError(
-// 				httpStatus.BAD_REQUEST,
-// 				"Invalid value of payment_for",
-// 			);
-// 		}
-
-// 		const metadata = {
-// 			user_id: user.id,
-// 			payment_for,
-// 			credit: 0,
-// 		};
-// 		if (payment_for === "buy_credit") {
-// 			if (credit === undefined) {
-// 				throw new ApiError(
-// 					httpStatus.BAD_REQUEST,
-// 					"Please provide required fields: credit",
-// 				);
-// 			}
-// 			if (Number.isNaN(Number(credit))) {
-// 				throw new ApiError(
-// 					httpStatus.BAD_REQUEST,
-// 					"credit must be valid numbers",
-// 				);
-// 			}
-// 			if (credit <= 0) {
-// 				throw new ApiError(
-// 					httpStatus.BAD_REQUEST,
-// 					"credit must be positive integers",
-// 				);
-// 			}
-// 			metadata["credit"] = credit;
-// 		} else if (payment_for === "book_submission") {
-// 			if (book_submission_id === undefined) {
-// 				throw new ApiError(
-// 					httpStatus.BAD_REQUEST,
-// 					"Please provide required fields: book_submission_id",
-// 				);
-// 			}
-
-// 			const bookSubmissionDoc = await BookSubmissionRequest.findOne({
-// 				where: { id: book_submission_id },
-// 			});
-// 			if (!bookSubmissionDoc) {
-// 				throw new ApiError(
-// 					httpStatus.BAD_REQUEST,
-// 					"Invalid book_submission_id",
-// 				);
-// 			}
-// 			metadata["book_submission_id"] = book_submission_id;
-// 		}
-
-// 		let stripeCustomer;
-// 		const existingCustomers = await stripe.customers.list({
-// 			email: user.email,
-// 			limit: 1,
-// 		});
-// 		if (existingCustomers.data.length > 0) {
-// 			stripeCustomer = existingCustomers.data[0];
-// 		} else {
-// 			stripeCustomer = await stripe.customers.create({
-// 				email: user.email,
-// 				name: `${user?.user_profile?.name}`,
-// 			});
-// 		}
-// 		await User.update(
-// 			{ stripe_customer_id: stripeCustomer.id },
-// 			{ where: { id: user.id } },
-// 		);
-// 		const rawAmount = Number(amount);
-// 		const rawCredit = payment_for === "book_submission" ? 0 : Number(credit);
-
-// 		const paymentIntent = await stripe.paymentIntents.create({
-// 			amount: Math.round(rawAmount * 100), // cents
-// 			currency: "usd",
-// 			customer: stripeCustomer.id,
-// 			description: "Turning Page credit purchase",
-// 			setup_future_usage: "off_session",
-// 			metadata: metadata,
-// 			shipping: {
-// 				name: user?.user_profile?.name || "",
-// 				address: {
-// 					line1: user.address || "",
-// 				},
-// 			},
-// 			automatic_payment_methods: {
-// 				enabled: true,
-// 			},
-// 		});
-
-// 		const paymentDoc = await Payment.create({
-// 			user_id: user.id,
-// 			payment_status: "pending",
-// 			payment_gateway: "stripe",
-// 			gateway_payment_status: "pending",
-// 			payment_mode: "online",
-// 			amount: rawAmount,
-// 			credit: payment_for === "book_submission" ? 0 : rawCredit,
-// 			transaction_id: paymentIntent.id,
-// 			currency: "USD",
-// 			payment_for: payment_for,
-// 			metadata: {
-// 				book_submission_id,
-// 			},
-// 		});
-
-// 		return {
-// 			client_secret: paymentIntent.client_secret,
-// 			payment_id: paymentDoc.id,
-// 			stripe_payment_intent_id: paymentIntent.id,
-// 		};
-// 	} catch (error) {
-// 		throw new ApiError(
-// 			error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
-// 			error.message,
-// 		);
-// 	}
-// };
 
 const getStripePaymentIntent = async (body) => {
   try {
@@ -320,88 +181,6 @@ console.log(event.type, "event.type======================");
 
         break;
       }
-
-      // case "payment_intent.succeeded": {
-      // 	const paymentIntentId = data.id;
-      // 	const metadata = data.metadata;
-      // 	console.log("Metadata:", metadata);
-      // 	const payment = await Payment.findOne({
-      // 		where: { transaction_id: paymentIntentId },
-      // 	});
-
-      // 	// if (!payment) {
-      // 	// 	console.warn("Payment record not found for intent:", paymentIntentId);
-      // 	// 	break;
-      // 	// }
-
-      // 	// Idempotency check (VERY IMPORTANT)
-      // 	if (payment.payment_status === "success") {
-      // 		break;
-      // 	}
-
-      // 	const charge = data.charges?.data?.[0];
-
-      // 	await Payment.update(
-      // 		{
-      // 			payment_status: "success",
-      // 			gateway_payment_status: "success",
-      // 			receipt_url: charge?.receipt_url || "",
-      // 		},
-      // 		{ where: { id: payment.id } },
-      // 	);
-
-      // 	if (metadata.payment_for === "buy_credit") {
-      // 		await User.increment(
-      // 			{ total_credit: payment.credit },
-      // 			{ where: { id: payment.user_id } },
-      // 		);
-      // 		// ✅ Save last purchased package
-      // 		if (payment.metadata?.package_name) {
-      // 			await User.update(
-      // 				{ package_name: payment.metadata.package_name },
-      // 				{ where: { id: payment.user_id } },
-      // 			);
-      // 		}
-      // 	} else if (metadata.payment_for === "book_submission") {
-      // 		const book_submission_id = metadata.book_submission_id;
-      // 		await BookSubmissionRequest.update(
-      // 			{
-      // 				payment_status: "success",
-      // 			},
-      // 			{ where: { id: book_submission_id } },
-      // 		);
-      // 	}
-      // 	break;
-      // }
-
-      // case "payment_intent.canceled": {
-      // 	const paymentIntentId = data.id;
-
-      // 	await Payment.update(
-      // 		{
-      // 			payment_status: "failed",
-      // 			gateway_payment_status: "failed",
-      // 		},
-      // 		{ where: { transaction_id: paymentIntentId } },
-      // 	);
-
-      // 	break;
-      // }
-
-      // case "charge.refunded": {
-      // 	const charge = data;
-      // 	const paymentIntentId = charge.payment_intent;
-
-      // 	await Payment.update(
-      // 		{
-      // 			is_refunded: true,
-      // 			payment_status: "failed",
-      // 		},
-      // 		{ where: { transaction_id: paymentIntentId } },
-      // 	);
-
-      // 	break;
-      // }
 
       case "invoice.payment_failed": {
         const invoice = event.data.object;
@@ -673,29 +452,6 @@ const getAllPayments = async (body) => {
     );
   }
 };
-
-// const getAllPayments = async (body) => {
-// 	try {
-// 		const { user } = body;
-
-// 		const paymentDocs = await Payment.findAll({
-// 			where: { is_active: true, user_id: user.id },
-// 		});
-// 		if (!paymentDocs) {
-// 			throw new ApiError(
-// 				httpStatus.BAD_REQUEST,
-// 				"Failed to fetch payments list",
-// 			);
-// 		}
-
-// 		return paymentDocs;
-// 	} catch (error) {
-// 		throw new ApiError(
-// 			error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
-// 			error.message,
-// 		);
-// 	}
-// };
 
 const getPaymentDetails = async (body) => {
   try {

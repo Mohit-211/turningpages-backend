@@ -390,59 +390,6 @@ const updateChapterAdmin = async (body) => {
   }
 };
 
-const getChapterByIdAdmin = async (params) => {
-  try {
-    const { chapterId } = params;
-
-    if (!chapterId) {
-      throw new ApiError(
-        httpStatus.BAD_REQUEST,
-        "Please provide required field: chapterId",
-      );
-    }
-
-    const chapterDoc = await Chapter.findOne({
-      where: {
-        id: chapterId,
-        is_active: 1,
-      },
-      include: [
-        {
-          model: Book,
-          as: "chapter_book",
-          attributes: [
-            "id",
-            "user_id",
-            "genre_id",
-            "title",
-            "description",
-            "status",
-            "visibility",
-          ],
-          include: [
-            {
-              model: Genre,
-              as: "book_genre",
-              attributes: ["id", "title"],
-            },
-          ],
-        },
-      ],
-    });
-
-    if (!chapterDoc) {
-      throw new ApiError(httpStatus.NOT_FOUND, "Chapter details not found");
-    }
-
-    return chapterDoc;
-  } catch (error) {
-    throw new ApiError(
-      error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
-      error.message,
-    );
-  }
-};
-
 const removeChapterAdmin = async (id) => {
   try {
     const chapterDoc = await Chapter.findOne({
@@ -641,7 +588,6 @@ module.exports = {
 
   createChapterAdmin,
   updateChapterAdmin,
-  getChapterByIdAdmin,
   removeChapterAdmin,
 
   chatWithAssistant,

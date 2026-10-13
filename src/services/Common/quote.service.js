@@ -302,10 +302,6 @@ const getQuotesByTag = async (slug, query) => {
 	}
 };
 
-const incrementReqCount = async (quote_id) => {
-	await Quote.increment("req_count", { where: { id: quote_id } });
-};
-
 const getAllTags = async (query) => {
 	try {
 		const page = Number(query.page) || 1;
@@ -425,7 +421,6 @@ module.exports = {
 	getQuotes,
 	getQuoteById,
 	getQuotesByTag,
-	incrementReqCount,
 	getAllTags,
 	createTag,
 	updateTag,

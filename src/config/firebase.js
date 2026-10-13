@@ -10,8 +10,4 @@ admin.initializeApp({
   }),
 });
 
-const generateFirebaseToken = async (userId) => {
-  return await admin.auth().createCustomToken(String(userId));
-};
-
-module.exports = { admin, generateFirebaseToken };
+module.exports = { admin };

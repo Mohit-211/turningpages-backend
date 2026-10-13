@@ -23,7 +23,6 @@ const {
 const bcrypt = require("bcryptjs");
 const ApiError = require("../../utils/ApiError");
 const { bookStatus, userStatusTypes } = require("../../config/types");
-const { createBookChat } = require("../Common/chat.service");
 const { participantRoles } = require("../../models/chatParticipant.model");
 const { sendUserCredentials } = require("../Common/email.service");
 
@@ -1321,75 +1320,6 @@ const adjustUserCredit = async (body) => {
   }
 };
 
-// const adminBookSubmissionAction = async (body) => {
-// 	const transaction = await sequelize.transaction();
-
-// 	try {
-// 		const { book_id, action } = body;
-
-// 		if (!book_id || !action) {
-// 			throw new ApiError(
-// 				httpStatus.BAD_REQUEST,
-// 				"book_id and action are required",
-// 			);
-// 		}
-
-// 		if (!["approved", "rejected"].includes(action)) {
-// 			throw new ApiError(httpStatus.BAD_REQUEST, "Invalid action");
-// 		}
-
-// 		// ---------------- BOOK CHECK ----------------
-// 		const bookDoc = await Book.findOne({
-// 			where: { id: book_id, is_active: 1 },
-// 			transaction,
-// 		});
-
-// 		if (!bookDoc) {
-// 			throw new ApiError(httpStatus.NOT_FOUND, "Book not found");
-// 		}
-
-// 		// ---------------- LATEST REQUEST ----------------
-// 		const latestRequest = await BookSubmissionRequest.findOne({
-// 			where: { book_id },
-// 			order: [["created_at", "DESC"]],
-// 			transaction,
-// 		});
-
-// 		if (!latestRequest || latestRequest.status !== "pending") {
-// 			throw new ApiError(httpStatus.BAD_REQUEST, "No pending submission found");
-// 		}
-
-// 		// ---------------- CREATE ADMIN EVENT ----------------
-// 		await BookSubmissionRequest.create(
-// 			{
-// 				book_id: bookDoc.id,
-// 				status: action,
-// 				event_name: latestRequest.event_name,
-// 				submited_at: new Date(),
-// 				reversal_at: new Date(),
-// 			},
-// 			{ transaction },
-// 		);
-
-// 		bookDoc.status = "in-editing";
-// 		await bookDoc.save({ transaction });
-
-// 		await transaction.commit();
-
-// 		return {
-// 			book_id,
-// 			status: action,
-// 			event_name: action,
-// 		};
-// 	} catch (error) {
-// 		await transaction.rollback();
-// 		throw new ApiError(
-// 			error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
-// 			error.message,
-// 		);
-// 	}
-// };
-
 const adminBookSubmissionAction = async (body) => {
   const transaction = await sequelize.transaction();
 
@@ -1523,7 +1453,6 @@ module.exports = {
   assignBookToEditor,
   getAllUsers,
   createUserWithCredentials,
-  getUserDetails,
   getUserDetails,
   getAllEditQueueData,
   getUserStats,

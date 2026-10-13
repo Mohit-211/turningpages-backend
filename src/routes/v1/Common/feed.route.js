@@ -72,12 +72,6 @@ router.get(
     feedController.getFeedComments
 );
 
-router.get(
-    '/:feed_id/comments',
-    [userAuthMiddleware.verifyAuthJWTToken],
-    feedController.getFeedComments
-);
-
 /**
  * ===============================
  * LIKE ROUTES

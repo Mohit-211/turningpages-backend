@@ -76,11 +76,6 @@ const updateChapterAdmin = catchAsync(async (req, res) => {
 	);
 });
 
-const getChapterByIdAdmin = catchAsync(async (req, res) => {
-	const genre = await chapterService.getChapterByIdAdmin(req.params.chapterId);
-	return responseWrapper(res, genre);
-});
-
 const removeChapterAdmin = catchAsync(async (req, res) => {
 	await chapterService.removeChapterAdmin(req.params.id);
 	return responseWrapper(res, "", "Chapter deleted successfully.");
@@ -148,7 +143,6 @@ module.exports = {
 
 	createChapterAdmin,
 	updateChapterAdmin,
-	getChapterByIdAdmin,
 	removeChapterAdmin,
 
 	chatWithAssistant,
