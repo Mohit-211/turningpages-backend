@@ -5,22 +5,22 @@ class UserFeedComment extends Model { }
 
 UserFeedComment.init({
     id: {
-        type: DataTypes.BIGINT,
+        type: DataTypes.BIGINT.UNSIGNED,
         autoIncrement: true,
         primaryKey: true
     },
     user_id: {
-        type: DataTypes.BIGINT,
+        type: DataTypes.BIGINT.UNSIGNED,
         allowNull: false,
         comment: 'User who created the ticket'
     },
     feed_id: {
-        type: DataTypes.BIGINT,
+        type: DataTypes.BIGINT.UNSIGNED,
         allowNull: true,
         comment: 'Feed Post Id'
     },
     parent_id: {
-        type: DataTypes.BIGINT,
+        type: DataTypes.BIGINT.UNSIGNED,
         allowNull: true,
         comment: 'Parent comment if this record is a reply comment'
     },

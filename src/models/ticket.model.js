@@ -5,7 +5,7 @@ class Ticket extends Model { }
 
 Ticket.init({
     id: {
-        type: DataTypes.BIGINT,
+        type: DataTypes.BIGINT.UNSIGNED,
         autoIncrement: true,
         primaryKey: true
     },
@@ -17,13 +17,13 @@ Ticket.init({
     },
 
     user_id: {
-        type: DataTypes.BIGINT,
+        type: DataTypes.BIGINT.UNSIGNED,
         allowNull: false,
         comment: 'User who created the ticket'
     },
 
     assigned_to: {
-        type: DataTypes.BIGINT,
+        type: DataTypes.BIGINT.UNSIGNED,
         allowNull: true,
         comment: 'Support agent/admin user id'
     },

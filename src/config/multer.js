@@ -6,7 +6,11 @@ const { status: httpStatus } = require('http-status');
 const config = require('./config');
 
 // Define base directory for uploads
-const PUBLIC_DIR = config.STORAGE_DIR;
+// const PUBLIC_DIR = config.STORAGE_DIR;
+
+const PUBLIC_DIR = path.resolve(
+  config.STORAGE_DIR || path.join(process.cwd(), 'storage')
+);
 
 // Ensure all required directories exist
 const ensureDirectoryExists = (dir) => {
