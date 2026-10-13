@@ -1,7 +1,6 @@
 const roleService = require('./role.service');
 const departmentService = require('./department.service');
 const emailService = require('./email.service');
-const tokenService = require('./token.service');
 const languageService = require('./language.service');
 
 const genreService = require('./genre.service');
@@ -21,7 +20,6 @@ module.exports = {
     roleService,
     departmentService,
     emailService,
-    tokenService,
     languageService,
     genreService,
     bookService,

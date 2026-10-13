@@ -1,8 +1,6 @@
-const httpStatus = require('http-status');
 const catchAsync = require('../../utils/catchAsync');
 const { subscriptionService } = require('../../services/Common');
 const responseWrapper = require('../../config/responseWrapper');
-const pick = require('../../utils/pick');
 
 const createSubscription = catchAsync(async (req, res) => {
     const result = await subscriptionService.createSubscription(req.body);

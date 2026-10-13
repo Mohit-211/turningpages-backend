@@ -2,10 +2,8 @@ const httpStatus = require('http-status');
 const jwt = require('jsonwebtoken');
 
 
-const sequelize = require('../config/central.db');
-const { Admin, Role, Department, Category, Service, User, State, City } = require('../models');
+const { Admin, Role, Department, User } = require('../models');
 const validateEmail = require('../helpers/validateEmail');
-const validatePassword = require('../helpers/validatePassword');
 const catchAsync = require('../utils/catchAsync');
 const responseWrapper = require('../config/responseWrapper');
 

@@ -125,15 +125,6 @@ const sendMessage = async (chat_room_id, senderId, role, message) => {
 			},
 		});
 
-	// await db.collection('chat_rooms')
-	//     .doc(String(chat_room_id))
-	//     .set({
-	//         last_message: message,
-	//         last_message_time: new Date(),
-	//         last_message_by: String(senderId)
-	//     }, { merge: true });
-
-	// ✅ Update last message in DB
 	await ChatRoom.update(
 		{
 			last_message: message,
@@ -180,46 +171,6 @@ const createBookChat = async (bookId, userId, transaction) => {
 
 	return chatRoom;
 };
-
-// const createBookChat = async (bookId, adminId, userId, editorIds = []) => {
-// 	const transaction = await sequelize.transaction();
-// 	try {
-// 		const chatRoom = await ChatRoom.create(
-// 			{
-// 				type: chatTypes.BOOK_GROUP,
-// 				book_id: bookId,
-// 				created_by: adminId,
-// 			},
-// 			{ transaction },
-// 		);
-
-// 		const participants = [
-// 			{
-// 				chat_room_id: chatRoom.id,
-// 				user_id: adminId,
-// 				role: participantRoles.ADMIN,
-// 			},
-// 			{
-// 				chat_room_id: chatRoom.id,
-// 				user_id: userId,
-// 				role: participantRoles.USER,
-// 			},
-// 			...editorIds.map((id) => ({
-// 				chat_room_id: chatRoom.id,
-// 				user_id: id,
-// 				role: participantRoles.EDITOR,
-// 			})),
-// 		];
-
-// 		await ChatParticipant.bulkCreate(participants, { transaction });
-
-// 		await transaction.commit();
-// 		return chatRoom;
-// 	} catch (error) {
-// 		await transaction.rollback();
-// 		throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message);
-// 	}
-// };
 
 const getUserChats = async (body) => {
 	try {
@@ -273,11 +224,6 @@ const getUserChats = async (body) => {
 						"is_active",
 					],
 					include: [
-						// {
-						//     model: ChatParticipant,
-						//     as: 'participants',
-						//     attributes: ['id', 'chat_room_id', 'user_id', 'role'],
-						// },
 						{
 							model: Book,
 							as: "book_details",
@@ -413,12 +359,6 @@ const getAllAdminChats = async (body) => {
 							],
 						},
 
-						// // 👇 ADMIN INFO (optional)
-						// {
-						// 	model: Admin,
-						// 	as: "chat_participant_ad",
-						// 	attributes: ["id", "name"],
-						// },
 					],
 				},
 			],

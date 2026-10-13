@@ -1,7 +1,6 @@
 /** @format */
 
 const httpStatus = require("http-status");
-const { Op, Sequelize } = require("sequelize");
 const {
 	Feed,
 	User,
@@ -562,7 +561,7 @@ const getAllFeeds = async (query) => {
 		const limit = Number(query.limit) || 10;
 		const offset = (page - 1) * limit;
 
-		const { genre_id, search } = query;
+		const { genre_id } = query;
 
 		// ✅ BASE WHERE
 		let whereCondition = {
@@ -571,14 +570,6 @@ const getAllFeeds = async (query) => {
 		};
 
 		if (genre_id) whereCondition.genre_id = genre_id;
-
-		// ✅ SEARCH
-		if (search) {
-			whereCondition[Op.or] = [
-				{ title: { [Op.like]: `%${search}%` } },
-				{ description: { [Op.like]: `%${search}%` } },
-			];
-		}
 
 		const { count, rows } = await Feed.findAndCountAll({
 			where: whereCondition,

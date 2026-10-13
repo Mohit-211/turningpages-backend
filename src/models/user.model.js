@@ -49,10 +49,6 @@ User.init(
       type: DataTypes.STRING(150),
       allowNull: true,
     },
-    fcm_token: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
     referral_code: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -143,10 +139,6 @@ User.init(
   },
 );
 
-function generateRandomString(length) {
-  return crypto.randomBytes(length).toString("base64").slice(0, length);
-}
-
 User.afterCreate(async (user, options) => {
 	user.socket_id = `${user.role_id}-${user.id}-socketId`;
 	user.referral_code = `tp${crypto.randomBytes(4).toString("hex")}`; // e.g. tp9f3a1c2e
@@ -156,36 +148,11 @@ User.afterCreate(async (user, options) => {
 	await user.save({ transaction: options.transaction });
 });
 
-function generateRandomLowercaseString(length) {
-  const possibleChars = "abcdefghijklmnopqrstuvwxyz";
-  let result = "";
-  while (result.length < length) {
-    const randomChar = possibleChars.charAt(
-      Math.floor(Math.random() * possibleChars.length),
-    );
-    result += randomChar;
-  }
-  return result;
-}
-
-function transformEmail() {
-  const additionalChars = generateRandomLowercaseString(10);
-  const additionalCharsAgain = generateRandomLowercaseString(5);
-  return additionalChars + "_" + additionalCharsAgain;
-}
-
 User.isEmailTaken = async function (email, role_id) {
   let u = await this.findOne({
     where: { email: email, role_id: role_id, is_active: true },
   });
   return !!u;
-};
-
-User.isUserNameTaken = async function (user_name, role_id) {
-  let u_n = await this.findOne({
-    where: { user_name: user_name, role_id: role_id, is_active: true },
-  });
-  return !!u_n;
 };
 
 User.beforeUpdate(async (user) => {

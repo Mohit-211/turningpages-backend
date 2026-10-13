@@ -16,9 +16,6 @@ const OTP = require("./otp.model");
 const Genre = require("./genre.model");
 const Book = require("./book.model");
 const Chapter = require("./chapter.model");
-const ChapterAttachment = require("./chapter-attachment.model");
-const Section = require("./section.model");
-const SectionAttachment = require("./section-attachment.model");
 
 const AssignBookEditor = require("./assignBookEditor.model");
 const Payment = require("./payment.model");
@@ -58,9 +55,6 @@ module.exports = {
   Genre,
   Book,
   Chapter,
-  ChapterAttachment,
-  Section,
-  SectionAttachment,
 
   AssignBookEditor,
   Payment,
@@ -116,21 +110,8 @@ async function initTableRelation() {
     as: "attachments_user",
   });
 
-  User.hasMany(UserAttachment, {
-    foreignKey: "user_id",
-    as: "user_album_attachments",
-  });
-  UserAttachment.belongsTo(User, {
-    foreignKey: "user_id",
-    as: "attachments_album_user",
-  });
   User.hasMany(UserToken, { foreignKey: "user_id", as: "user_tokens" });
   UserToken.belongsTo(User, { foreignKey: "user_id", as: "token_user" });
-  UserToken.belongsTo(Profile, {
-    foreignKey: "user_id",
-    as: "token_user_profile",
-    sourceKey: "user_id",
-  });
 
   userLoginTiming.belongsTo(User, { foreignKey: "user_id", as: "login_user" });
   userLoginTiming.belongsTo(Timezone, {
@@ -163,24 +144,6 @@ async function initTableRelation() {
     foreignKey: "book_id",
     as: "chapter_book",
   });
-  Chapter.hasMany(ChapterAttachment, {
-    foreignKey: "chapter_id",
-    as: "chapter_attachments",
-  });
-
-  Chapter.hasMany(Section, {
-    foreignKey: "chapter_id",
-    as: "chapter_sections",
-  });
-  Section.belongsTo(Chapter, {
-    foreignKey: "chapter_id",
-    as: "section_chapter",
-  });
-  Section.hasMany(SectionAttachment, {
-    foreignKey: "section_id",
-    as: "section_attachments",
-  });
-
   Book.hasMany(AssignBookEditor, {
     foreignKey: "book_id",
     as: "book_editors",

@@ -2,11 +2,8 @@
 
 const axios = require("axios");
 const config = require("./config");
-const LLM_PROVIDER = "grok";
-const LLM_TIMEOUT = 60000; // 30s
 const LLM_MODELS = {
   grok: "grok-3-mini",
-  openai: "gpt-4o-mini",
 };
 
 const askGrok = async (prompt) => {
@@ -43,60 +40,9 @@ const askGrok = async (prompt) => {
   return content;
 };
 
-const askOpenAI = async (prompt) => {
-  const response = await axios.post(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      model: LLM_MODELS.openai,
-      messages: [
-        { role: "system", content: "You are a precise, factual assistant." },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.2,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      timeout: 60000,
-    },
-  );
-
-  console.log(response, "open ai response");
-
-  if (!response.data?.choices?.length) {
-    throw new Error("Empty response from OpenAI");
-  }
-
-  return response.data.choices[0].message.content;
-};
-
 const askLLM = async (prompt) => {
   console.log("reached here");
-  switch (LLM_PROVIDER) {
-    case "grok":
-      return askGrok(prompt);
-
-    case "openai":
-      return askOpenAI(prompt);
-
-    default:
-      throw new Error(`Unsupported LLM provider: ${LLM_PROVIDER}`);
-  }
-};
-
-const withRetry = async (fn, retries = 2) => {
-  try {
-    return await fn();
-  } catch (err) {
-    if (retries === 0) throw err;
-    return withRetry(fn, retries - 1);
-  }
-};
-
-const askLLMWithRetry = async (prompt) => {
-  return withRetry(() => askGrok(prompt));
+  return askGrok(prompt);
 };
 
 const safeJSONParse = (text) => {
@@ -234,39 +180,6 @@ const askGrokConsistancy = async (messages) => {
 
   return jsonMatch[0];
 };
-
-// const askGrokConsistancy = async (messages) => {
-//   const response = await axios.post(
-//     "https://api.x.ai/v1/chat/completions",
-//     {
-//       model: LLM_MODELS.grok,
-//       messages: messages,
-//       temperature: 0.2,
-//     },
-//     {
-//       headers: {
-//         Authorization: `Bearer ${config.GROK_API_KEY}`,
-//         "Content-Type": "application/json",
-//       },
-//       timeout: 60000,
-//     },
-//   );
-
-//   if (!response.data?.choices?.length) {
-//     throw new Error("Empty response from Grok");
-//   }
-
-//   const content = response.data.choices[0].message.content;
-
-//   // 🔥 Extract JSON safely (prevents crash)
-//   const jsonMatch = content.match(/\{[\s\S]*\}/);
-
-//   if (!jsonMatch) {
-//     throw new Error("Invalid JSON from Grok");
-//   }
-
-//   return jsonMatch[0];
-// };
 
 module.exports = {
   askLLM,

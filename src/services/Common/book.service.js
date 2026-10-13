@@ -5,19 +5,16 @@ const { Op } = require("sequelize");
 const axios = require("axios");
 
 const {
-  Book,
-  Genre,
-  Chapter,
-  User,
-  BookSubmissionRequest,
-  UserCreditSpending,
-  AssignBookEditor,
-  Admin,
-  Role,
-  Department,
-  ChatRoom,
-  Payment,
-  ChatParticipant,
+	Book,
+	Genre,
+	Chapter,
+	User,
+	BookSubmissionRequest,
+	UserCreditSpending,
+	AssignBookEditor,
+	ChatRoom,
+	Payment,
+	ChatParticipant,
 } = require("../../models");
 const ApiError = require("../../utils/ApiError");
 const sequelize = require("../../config/central.db");
@@ -249,25 +246,6 @@ const getBookById = async (body, params) => {
             "is_active",
           ],
           required: false,
-          // include: [
-          //     {
-          //         model: Admin,
-          //         as: 'editor',
-          //         attributes: ['id', 'name', 'email', 'role_id', 'department_id', 'is_active'],
-          //         include: [
-          //             {
-          //                 model: Role,
-          //                 as: 'admin_role',
-          //                 attributes: ['id', 'name', 'abbreviation'],
-          //             },
-          //             {
-          //                 model: Department,
-          //                 as: 'admin_department',
-          //                 attributes: ['id', 'name'],
-          //             }
-          //         ],
-          //     },
-          // ],
         },
         {
           model: ChatRoom,
@@ -452,170 +430,6 @@ const removeBooks = async (body) => {
     );
   }
 };
-
-// const bookEventUpdate = async (body) => {
-// 	const transaction = await sequelize.transaction();
-
-// 	try {
-// 		const { user, book_id, event_name, note } = body;
-
-// 		// ---------------- VALIDATION ----------------
-// 		if (!book_id || !event_name) {
-// 			throw new ApiError(
-// 				httpStatus.BAD_REQUEST,
-// 				"book_id and event_name are required",
-// 			);
-// 		}
-
-// 		const allowedEvents = ["submit", "re-submit", "withdraw", "completed"];
-// 		if (!allowedEvents.includes(event_name)) {
-// 			throw new ApiError(httpStatus.BAD_REQUEST, "Invalid event_name");
-// 		}
-
-// 		// ---------------- PACKAGE CHECK ----------------
-// 		const activePackage = await Payment.findOne({
-// 			where: {
-// 				user_id: user.id,
-// 				payment_for: "package_purchase",
-// 				payment_status: "success",
-// 			},
-// 			order: [["created_at", "DESC"]],
-// 			transaction,
-// 		});
-
-// 		if (!activePackage && event_name === "submit") {
-// 			throw new ApiError(
-// 				httpStatus.BAD_REQUEST,
-// 				"Please purchase a package to submit a book",
-// 			);
-// 		}
-
-// 		// ---------------- BOOK CHECK ----------------
-// 		const bookDoc = await Book.findOne({
-// 			where: {
-// 				id: book_id,
-// 				user_id: user.id,
-// 				is_active: 1,
-// 			},
-// 			transaction,
-// 		});
-
-// 		if (!bookDoc) {
-// 			throw new ApiError(httpStatus.NOT_FOUND, "Book not found");
-// 		}
-
-// 		// ---------------- LATEST REQUEST ----------------
-// 		const latestRequest = await BookSubmissionRequest.findOne({
-// 			where: { book_id },
-// 			order: [["created_at", "DESC"]],
-// 			transaction,
-// 		});
-
-// 		let status = "approved";
-// 		let reversalAt = null;
-
-// 		// ---------------- EVENT LOGIC ----------------
-// 		switch (event_name) {
-// 			case "submit":
-// 				if (latestRequest) {
-// 					throw new ApiError(httpStatus.BAD_REQUEST, "Book already submitted");
-// 				}
-// 				status = "approved";
-// 				break;
-
-// 			case "re-submit":
-// 				if (!latestRequest) {
-// 					throw new ApiError(httpStatus.BAD_REQUEST, "Submit book first");
-// 				}
-// 				if (
-// 					latestRequest.status !== "rejected" &&
-// 					latestRequest.status !== "approved"
-// 				) {
-// 					throw new ApiError(
-// 						httpStatus.BAD_REQUEST,
-// 						"Re-submit allowed only after rejection or approval",
-// 					);
-// 				}
-
-// 				if (event_name === "re-submit" && !note) {
-// 					throw new ApiError(
-// 						httpStatus.BAD_REQUEST,
-// 						"Note is required for re-submit",
-// 					);
-// 				}
-
-// 				status = "approved";
-// 				reversalAt = new Date();
-// 				break;
-
-// 			case "completed":
-// 				if (
-// 					!latestRequest ||
-// 					latestRequest.status === "pending" ||
-// 					latestRequest.status === "rejected"
-// 				) {
-// 					throw new ApiError(
-// 						httpStatus.BAD_REQUEST,
-// 						"Only approved submissions can be completed",
-// 					);
-// 				}
-// 				status = "approved";
-// 				reversalAt = new Date();
-// 				break;
-
-// 			case "withdraw":
-// 				if (!latestRequest || latestRequest.status !== "approved") {
-// 					throw new ApiError(
-// 						httpStatus.BAD_REQUEST,
-// 						"Withdraw allowed only after approval",
-// 					);
-// 				}
-// 				status = "approved";
-// 				reversalAt = new Date();
-// 				break;
-// 		}
-
-// 		if (["submit", "re-submit"].includes(event_name)) {
-// 			await Book.update(
-// 				{ status: "in-editing" },
-// 				{ where: { id: book_id }, transaction },
-// 			);
-// 		}
-
-// 		if (event_name === "withdraw") {
-// 			await Book.update(
-// 				{ status: "draft" }, // or "withdrawn"
-// 				{ where: { id: book_id }, transaction },
-// 			);
-// 		}
-
-// 		if (event_name === "completed") {
-// 			await bookDoc.update({ status: "completed" }, { transaction });
-// 		}
-
-// 		// ---------------- CREATE EVENT LOG ----------------
-// 		const submissionDoc = await BookSubmissionRequest.create(
-// 			{
-// 				book_id,
-// 				status,
-// 				note: event_name === "re-submit" ? note : null,
-// 				event_name,
-// 				submited_at: new Date(),
-// 				reversal_at: reversalAt,
-// 			},
-// 			{ transaction },
-// 		);
-
-// 		await transaction.commit();
-// 		return submissionDoc;
-// 	} catch (error) {
-// 		await transaction.rollback();
-// 		throw new ApiError(
-// 			error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
-// 			error.message,
-// 		);
-// 	}
-// };
 
 const bookEventUpdate = async (body) => {
   console.log(body, "body");
@@ -1048,7 +862,6 @@ const checkPlagiarism = async (body) => {
   }
 };
 
-// new code
 const factCheckingForChapter = async (body) => {
   let transaction;
 
@@ -1174,93 +987,6 @@ const factCheckingForChapter = async (body) => {
     );
   }
 };
-
-// old code
-// const factCheckingForChapter = async (body) => {
-//   let transaction;
-//   try {
-//     console.log("hello");
-//     transaction = await sequelize.transaction();
-//     const { user, text } = body;
-
-//     if (!text || typeof text !== "string") {
-//       throw new ApiError(400, "Text is required for fact check");
-//     }
-
-//     const alphabetCount = countAlphabets(text);
-//     if (alphabetCount < 200) {
-//       throw new ApiError(
-//         400,
-//         `Minimum 200 alphabet characters required. Currently provided: ${alphabetCount}`,
-//       );
-//     }
-//     const userDoc = await User.findByPk(user.id, { transaction });
-
-//     if (!userDoc || userDoc.total_credit < 1) {
-//       throw new ApiError(400, "Insufficient credits");
-//     }
-
-//     const remainingCredit = userDoc.total_credit - 2;
-
-//     const normalizeText = (text) => {
-//       return text
-//         .replace(/\.(?=[A-Za-z])/g, ". ") // add space after period
-//         .replace(/\s+/g, " ") // clean extra spaces
-//         .trim();
-//     };
-//     const cleanText = normalizeText(text);
-//     console.log(cleanText, "cleanText");
-
-//     const factCheckResult = await factCheckChapter(cleanText);
-//     console.log(factCheckResult, "factcheck");
-
-//     if (Array.isArray(factCheckResult) && factCheckResult.length === 0) {
-//       throw new ApiError(
-//         400,
-//         "No factual claims found. Please provide clear factual statements (dates, events, numbers, etc.) for fact-checking.",
-//       );
-//     }
-
-//     // ✅ Optional: generic failure check
-//     if (!factCheckResult || !Array.isArray(factCheckResult)) {
-//       console.error("Invalid fact check response:", factCheckResult);
-
-//       throw new ApiError(
-//         500,
-//         factCheckResult?.response?.description ||
-//           "Invalid response from fact-check API",
-//       );
-//     }
-
-//     await userDoc.decrement("total_credit", { by: 1, transaction });
-
-//     // store credit log
-//     await UserCreditSpending.create(
-//       {
-//         user_id: user.id,
-//         credit_spent: 1,
-//         remaining_credit: remainingCredit,
-//         event_name: "fact_checking",
-//       },
-//       { transaction },
-//     );
-
-//     await transaction.commit();
-
-//     return factCheckResult;
-//   } catch (error) {
-//     if (transaction) {
-//       await transaction.rollback();
-//     }
-
-//     console.log("factCheckingForChapter error: ", error);
-
-//     throw new ApiError(
-//       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
-//       error.message || "Fact check failed",
-//     );
-//   }
-// };
 
 const generateConsistencySummary = async (issues, score) => {
   const response = await axios.post(
@@ -1433,7 +1159,6 @@ const bookConsistancyCheck = async (body) => {
       chapter_summary: chapterSummaries,
     };
 
-    // 🔥 ADD THIS RIGHT AFTER
     const summary = await generateConsistencySummary(
       finalResult.issues,
       finalResult.overall_consistency_score,
@@ -1468,117 +1193,6 @@ const bookConsistancyCheck = async (body) => {
     );
   }
 };
-
-// const bookConsistancyCheck = async (body) => {
-//   try {
-//     const transaction = await sequelize.transaction();
-//     const { user, book_id } = body;
-
-//     const bookDoc = await Book.findOne({
-//       where: {
-//         id: book_id,
-//         is_active: 1,
-//       },
-//       include: [
-//         {
-//           model: BookSubmissionRequest,
-//           as: "book_submissions",
-//           attributes: [
-//             "id",
-//             "book_id",
-//             "status",
-//             "event_name",
-//             "submited_at",
-//             "reversal_at",
-//             "is_active",
-//           ],
-//           limit: 5,
-//           required: false,
-//           order: [["created_at", "DESC"]],
-//         },
-//         {
-//           model: Genre,
-//           as: "book_genre",
-//           attributes: ["id", "title"],
-//         },
-//         {
-//           model: Chapter,
-//           as: "book_chapters",
-//           attributes: [
-//             "id",
-//             "title",
-//             "content",
-//             "book_id",
-//             "description",
-//             "word_count",
-//           ],
-//         },
-//       ],
-//     });
-
-//     if (!bookDoc) {
-//       throw new ApiError(httpStatus.NOT_FOUND, "Book details not found");
-//     }
-//     const userDoc = await User.findByPk(user.id, { transaction });
-
-//     if (!userDoc || userDoc.total_credit < 1) {
-//       throw new ApiError(400, "Insufficient credits");
-//     }
-
-//     const remainingCredit = userDoc.total_credit - 1;
-
-//     bookDoc.book_chapters = bookDoc.book_chapters.slice(0, 3);
-//     let consistanctBlocks = buildConsistencyPrompt(bookDoc);
-//     const messages = [
-//       { role: "system", content: CONSISTANCY_SYSTEM_PROMPT },
-//       { role: "user", content: consistanctBlocks },
-//     ];
-//     let response;
-
-//     try {
-//       response = await askGrokConsistancy(messages);
-//     } catch (err) {
-//       if (err.code === "ECONNABORTED") {
-//         throw new ApiError(408, "AI request timeout. Try reducing content.");
-//       }
-//       throw err;
-//     }
-
-//     let parsedResult;
-
-//     try {
-//       parsedResult = JSON.parse(response);
-//     } catch (err) {
-//       throw new ApiError(
-//         httpStatus.BAD_GATEWAY,
-//         "Invalid JSON returned from AI",
-//       );
-//     }
-
-//     await userDoc.decrement("total_credit", { by: 1, transaction });
-
-//     // store credit log
-//     await UserCreditSpending.create(
-//       {
-//         user_id: user.id,
-//         credit_spent: 1,
-//         remaining_credit: remainingCredit,
-//         event_name: "consistency_check",
-//       },
-//       { transaction },
-//     );
-
-//     await transaction.commit();
-//     console.log(parsedResult, "parsedResult");
-//     return parsedResult;
-//   } catch (error) {
-//     console.log("factCheckingForChapter error: ", error);
-//     throw new ApiError(
-//       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
-//       error.message || "Plagiarism check failed",
-//     );
-//   }
-// };
 
 const generateChapterSummary = async (body) => {
   try {

@@ -1,7 +1,6 @@
 /** @format */
 
 const { askLLM, factCheckClaim } = require("../config/llm.config");
-const axios = require("axios");
 
 
 const extractClaims = async (chapterText) => {
@@ -35,63 +34,6 @@ ${chapterText}
     return [];
   }
 };
-
-const fetchEvidence = async (claim) => {
-  try {
-    const response = await axios.get("https://en.wikipedia.org/w/api.php", {
-      params: {
-        action: "query",
-        list: "search",
-        srsearch: claim,
-        format: "json",
-        srlimit: 3,
-        origin: "*",
-      },
-      headers: {
-        "User-Agent": "BookFactChecker/1.0 (contact: youremail@example.com)",
-      },
-      timeout: 10000,
-    });
-
-    const results = response.data?.query?.search || [];
-    console.log("111111111111: results:", { results, claim });
-
-    return results.map((item) => ({
-      title: item.title,
-      snippet: item.snippet.replace(/<\/?[^>]+(>|$)/g, ""), // remove HTML
-      url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title)}`,
-    }));
-  } catch (err) {
-    console.error("Evidence fetch failed:", err.message);
-    return [];
-  }
-};
-
-const verifyClaim = async (claimObj, evidence) => {
-  try {
-    const prompt = buildFactCheckPrompt(claimObj.claim, evidence);
-    const raw = await askLLM(prompt);
-
-    const cleaned = cleanLLMResponse(raw);
-    const parsed = JSON.parse(cleaned);
-
-    return {
-      ...claimObj,
-      ...parsed,
-    };
-  } catch (err) {
-    console.log("❌ verifyClaim parse failed:", err.message);
-
-    return {
-      ...claimObj,
-      verdict: "PENDING",
-      explanation: "Verification failed due to parsing issue.",
-      citations: [],
-    };
-  }
-};
-
-// 🔥 Add here (top of file)
 
 const cleanLLMResponse = (text) => {
   if (!text) return "";
@@ -180,35 +122,6 @@ const withTimeout = (promise, ms = 60000) => {
   ]);
 };
 
-const buildFactCheckPrompt = (claim, evidence) => `
-  Claim:
-  "${claim}"
-
-  Evidence:
-  ${evidence
-    .map(
-      (e, i) => `
-  ${i + 1}. ${e.title}
-  ${e.snippet}
-  Source: ${e.url}
-  `,
-    )
-    .join("\n")}
-
-  Task:
-  - Verify the claim strictly using the evidence.
-  - Respond in JSON only.
-  - Verdict must be one of: TRUE, FALSE, MISLEADING, UNVERIFIABLE.
-
-  Response format:
-  {
-    "verdict": "",
-    "confidence": "0-100%",
-    "explanation": "",
-    "sources": []
-  }
-`;
-
 const buildConsistencyPrompt = (book) => {
   const { title, book_genre, book_chapters } = book;
 
@@ -245,56 +158,7 @@ ${formattedChapters}
 `;
 };
 
-// const buildConsistencyPrompt = (book) => {
-//   const { title, book_genre, book_chapters } = book;
-
-//   let formattedChapters = "";
-
-//   // book_chapters.forEach((chapter, index) => {
-//   //   formattedChapters += `\n====================\n`;
-//   //   formattedChapters += `CHAPTER ${index + 1}: ${chapter.title}\n`;
-//   //   formattedChapters += `====================\n`;
-//   //   if(!chapter?.content){}
-
-//   //   const lines = chapter?.content ? chapter?.content.split("\n") : "";
-
-//   //   lines.forEach((line, lineIndex) => {
-//   //     if (line.trim() !== "") {
-//   //       formattedChapters += `[${lineIndex + 1}] ${line.trim()}\n`;
-//   //     }
-//   //   });
-//   // });
-
-//   book_chapters.forEach((chapter, index) => {
-//     formattedChapters += `\n====================\n`;
-//     formattedChapters += `CHAPTER ${index + 1}: ${chapter.title}\n`;
-//     formattedChapters += `====================\n`;
-
-//     if (!chapter?.content) return;
-
-//     const cleanContent = chapter.content.replace(/<[^>]*>/g, "");
-//     const lines = cleanContent.split("\n");
-
-//     lines.forEach((line, lineIndex) => {
-//       if (line.trim()) {
-//         formattedChapters += `[${lineIndex + 1}] ${line.trim()}\n`;
-//       }
-//     });
-//   });
-
-//   return `
-// Check consistency of the following book.
-
-// BOOK TITLE: ${title}
-// GENRE: ${book_genre?.title || "Unknown"}
-
-// ${formattedChapters}
-
-// --- END OF BOOK ---
-// `;
-// };
-
-CONSISTANCY_SYSTEM_PROMPT = `
+const CONSISTANCY_SYSTEM_PROMPT = `
 You are a professional literary consistency analysis engine.
 
 IMPORTANT INSTRUCTIONS:
@@ -369,7 +233,7 @@ Be strict and analytical.
 Do not assume information not present in the text.
 `;
 
-CHAPTER_SUMMARIZATION_SYSTEM_PROMPT = `
+const CHAPTER_SUMMARIZATION_SYSTEM_PROMPT = `
 You are an elite literary summarization engine trained for professional publishing standards.
 
 Your task is to produce a high-quality, precise, and industry-grade summary of the provided chapter content.
@@ -408,9 +272,6 @@ Be precise. Be analytical. Be publication-quality.
 `;
 
 module.exports = {
-  extractClaims,
-  fetchEvidence,
-  verifyClaim,
   factCheckChapter,
   buildConsistencyPrompt,
   CONSISTANCY_SYSTEM_PROMPT,
