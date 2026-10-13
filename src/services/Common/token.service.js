@@ -1,84 +1,58 @@
+const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 const { DateTime } = require('luxon')
 const config = require('../../config/config');
 
+const { UserToken } = require('../../models');
 const { tokenTypes } = require('../../config/types');
-const { QueryTypes } = require('sequelize');
-const sequelize = require('../../config/central.db');
-const ApiError = require('../../utils/ApiError');
 
 
-const generateToken = (userId, expires, type, role_id, secret = config.jwt.secret) => {
-    try {
-        const payload = {
-            sub: userId,
-            iat: DateTime.now().toUnixInteger(),
-            exp: expires.toUnixInteger(),
-            type,
-            role_id: role_id
-        };
-        return jwt.sign(payload, secret);
-
-    } catch (error) {
-        throw new ApiError(error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR, error.message);
-    }
+const generateToken = (userId, expires, type, role_id) => {
+    const payload = {
+        sub: userId,
+        iat: DateTime.now().toUnixInteger(),
+        exp: expires.toUnixInteger(),
+        type,
+        role_id: role_id,
+        // Unique per token, so two tokens issued in the same second never collide
+        jti: crypto.randomUUID(),
+    };
+    return jwt.sign(payload, config.jwt.secret, { algorithm: 'HS256' });
 };
-
-
-const saveToken = async (token, userId, expires, type, role_id, fcm_token) => {
-    try {
-        let sql = '';
-        if (fcm_token) {
-            sql = `INSERT INTO user_tokens ( user_id, token_type, token, expired_at, fcm_token, created_at, updated_at, role_id) values (
-                '${userId}', '${type}', '${token}', '${expires}' , '${fcm_token}', now(), now(), ${role_id})`;
-        } else {
-            sql = `INSERT INTO user_tokens ( user_id, token_type, token, expired_at, created_at, updated_at, role_id) values (
-                '${userId}', '${type}', '${token}', '${expires}' , now(), now(), ${role_id})`;
-        }
-
-
-        let tokenDoc = await sequelize.query(
-            sql, {
-            type: QueryTypes.INSERT
-        });
-        return tokenDoc;
-
-    } catch (error) {
-        throw new ApiError(error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR, error.message);
-    }
-};
-
 
 const generateAuthTokens = async (user) => {
-    try {
-        if (!user) {
-            throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error: Invalid User');
-        };
+    const accessTokenExpires = DateTime.now().plus({ days: config.jwt.accessExpirationDays });
+    const accessToken = generateToken(user.id, accessTokenExpires, tokenTypes.ACCESS, user.role_id);
 
-        const accessTokenExpires = DateTime.now().plus({ days: Number(config.jwt.accessExpirationMinutes) || 0 });
-        const accessToken = generateToken(user.id, accessTokenExpires, tokenTypes.ACCESS, user.role_id);
+    const tokenDoc = await UserToken.create({
+        user_id: user.id,
+        role_id: user.role_id,
+        token_type: tokenTypes.ACCESS,
+        token: accessToken,
+        expired_at: accessTokenExpires.toJSDate(),
+    });
 
-        let tokenDoc = await saveToken(accessToken, user.id, accessTokenExpires.toUTC().toFormat('yyyy-MM-dd HH:mm:ss'), tokenTypes.ACCESS, user.role_id, user.fcm_token);
+    return {
+        access: {
+            id: tokenDoc.id,
+            token: accessToken,
+            expires: accessTokenExpires.toJSDate(),
+        },
+        refresh: {
+            id: '',
+            token: '',
+            expires: ''
+        },
+    };
+};
 
-        return {
-            access: {
-                id: tokenDoc[0],
-                token: accessToken,
-                expires: accessTokenExpires.toJSDate(),
-            },
-            refresh: {
-                id: '',
-                token: '',
-                expires: ''
-            },
-        };
-
-    } catch (error) {
-        throw new ApiError(error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR, error.message);
-    }
+// Ends every session of a user, e.g. after a password change or reset
+const revokeAllUserTokens = async (userId) => {
+    await UserToken.destroy({ where: { user_id: userId }, force: true });
 };
 
 
 module.exports = {
-    generateAuthTokens
+    generateAuthTokens,
+    revokeAllUserTokens,
 };

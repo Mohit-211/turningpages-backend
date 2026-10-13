@@ -113,12 +113,15 @@ const getTicketById = async (body, params) => {
     const ticket = await Ticket.findOne({
       where: {
         id: ticketId,
+        user_id: user.id,
         is_active: 1,
       },
       include: [
         {
           model: TicketMessage,
           as: "ticket_messages",
+          // Internal notes are for support staff only
+          where: { is_internal: false },
           order: [["created_at", "ASC"]],
           required: false,
         },
@@ -133,13 +136,6 @@ const getTicketById = async (body, params) => {
 
     if (!ticket) {
       throw new ApiError(httpStatus.NOT_FOUND, "Ticket not found");
-    }
-
-    if (
-      ticket.user_id !== user.id &&
-      !["ADM", "SUP_ADM", "ENG"].includes(user.role_id)
-    ) {
-      throw new ApiError(httpStatus.FORBIDDEN, "Access denied");
     }
 
     return ticket;
@@ -163,7 +159,9 @@ const addMessage = async (body) => {
       );
     }
 
-    const ticket = await Ticket.findByPk(ticket_id);
+    const ticket = await Ticket.findOne({
+      where: { id: ticket_id, user_id: user.id, is_active: 1 },
+    });
     if (!ticket) {
       throw new ApiError(httpStatus.NOT_FOUND, "Ticket not found");
     }
@@ -171,7 +169,7 @@ const addMessage = async (body) => {
     const msgDoc = await TicketMessage.create({
       ticket_id,
       sender_id: user.id,
-      sender_role: user.role_id == config.USR_ROLE_ID ? "user" : "support",
+      sender_role: "user",
       message,
     });
 
@@ -194,11 +192,8 @@ const searchTickets = async (body) => {
   try {
     const { user, status, priority, keyword } = body;
 
-    let where = { is_active: 1 };
-
-    if (![Number(config.SUP_ADM_ROLE_ID)].includes(user.role_id)) {
-      where.user_id = user.id;
-    }
+    // Users search only their own tickets; admins use the /support/ad/* routes
+    let where = { is_active: 1, user_id: user.id };
 
     if (status) where.status = status;
     if (priority) where.priority = priority;

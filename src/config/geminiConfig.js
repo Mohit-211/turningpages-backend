@@ -1,5 +1,5 @@
-// https://ai.google.dev/gemini-api/docs/quickstart
-const { GoogleGenAI } = require("@google/genai");
+// https://ai.google.dev/gemini-api/docs/models
+const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
 const config = require("./config");
 const systemInstructionForChapter = `
     You are a world-class, award-winning author with 30+ years of experience in writing bestselling novels. 
@@ -13,11 +13,21 @@ const systemInstructionForChapter = `
     Assume the user will continue building the next chapter, so leave natural hooks.
 `;
 
-
 const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
 
+// Gemini 3 image models may return interim "thought" images before the final render, and the SDK's
+// response.data concatenates every image part, so pick the last non-thought image explicitly.
+const extractFinalImage = (response) => {
+    const parts = response?.candidates?.[0]?.content?.parts || [];
+    const images = parts.filter((part) => part.inlineData?.data && !part.thought);
+    const finalImage = images[images.length - 1];
+    if (!finalImage) return null;
+    return { data: finalImage.inlineData.data, mimeType: finalImage.inlineData.mimeType || "image/png" };
+};
 
 module.exports = {
     systemInstructionForChapter,
     ai,
+    ThinkingLevel,
+    extractFinalImage,
 }

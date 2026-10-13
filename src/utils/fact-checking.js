@@ -27,7 +27,6 @@ ${chapterText}
 `;
 
     const res = await askLLM(prompt);
-    console.log("🧠 RAW LLM RESPONSE:\n", res);
 
     return extractJSON(res);
   } catch (err) {
@@ -53,7 +52,7 @@ const extractJSON = (text) => {
 
     return JSON.parse(match[0]);
   } catch (err) {
-    console.error("❌ FINAL PARSE FAILED:", text);
+    console.error("❌ Could not parse claims from AI response");
 
     // ✅ fallback extraction
     return text
@@ -90,10 +89,7 @@ const claims = (await extractClaims(chapterText)).slice(0, 2);
         claim: claim.claim,
       };
     } else {
-      console.log("❌ Claim failed:", claim.claim, res.reason?.message);
-
-      console.log("RAW TEXT:", chapterText);
-      console.log("EXTRACTED CLAIMS:", claims);
+      console.log("❌ Claim check failed:", res.reason?.message);
 
       return {
         claim: claim.claim,

@@ -9,9 +9,9 @@ router.get('/all', [userAuthMiddleware.verifyAuthJWTToken], paymentController.ge
 router.post('/details', [userAuthMiddleware.verifyAuthJWTToken], paymentController.getPaymentDetails);
 router.get('/credit/list', [userAuthMiddleware.verifyAuthJWTToken], paymentController.getCreditSpentList);
 
-router.get('/getAllPaymentList', paymentController.getAllPaymentList);
+router.get('/getAllPaymentList', [adminAuthMiddleware.validateJWTtoken, adminAuthMiddleware.isSuperAdmin], paymentController.getAllPaymentList);
 
-router.get('/getAllSubscriptions', subscriptionController.getAllSubscriptions);
+router.get('/getAllSubscriptions', [adminAuthMiddleware.validateJWTtoken, adminAuthMiddleware.isSuperAdmin], subscriptionController.getAllSubscriptions);
 
 
 //subscription apis

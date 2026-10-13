@@ -25,6 +25,7 @@ const updateBook = catchAsync(async (req, res) => {
 		"book_id",
 		"cover_img_name",
 		"author",
+		"user",
 	]);
 	const genre = await bookService.updateBook(body);
 	return responseWrapper(

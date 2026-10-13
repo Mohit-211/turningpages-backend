@@ -26,11 +26,8 @@ const {
 } = require("../../utils/fact-checking");
 const { askGrokConsistancy } = require("../../config/llm.config");
 const { createBookChat } = require("./chat.service");
+const { findOwnedBook, findOwnedChapter } = require("../../utils/ownership");
 const config = require("../../config/config");
-const LLM_MODELS = {
-  grok: "grok-3-mini",
-  openai: "gpt-4o-mini",
-};
 
 const createBook = async (body) => {
   try {
@@ -77,7 +74,7 @@ const createBook = async (body) => {
 
 const updateBook = async (body) => {
   try {
-    const { title, description, genre_id, cover_img_name, book_id, author } =
+    const { user, title, description, genre_id, cover_img_name, book_id, author } =
       body;
 
     if (!book_id) {
@@ -86,9 +83,7 @@ const updateBook = async (body) => {
         "Please provide required fields: book_id",
       );
     }
-    const bookDoc = await Book.findOne({
-      where: { id: book_id },
-    });
+    const bookDoc = await findOwnedBook(book_id, user);
 
     if (!bookDoc) {
       throw new ApiError(httpStatus.NOT_FOUND, "No book found");
@@ -109,29 +104,8 @@ const updateBook = async (body) => {
     if (description) updateData.description = description;
     if (author) updateData.author = author;
 
-    await Book.update(updateData, {
-      where: { id: book_id },
-    });
-
-    // ✅ Update related chat room name if title changed
-    if (title) {
-      await ChatRoom.update(
-        {
-          name: title, // or room_name depending on your column
-        },
-        {
-          where: {
-            book_id: book_id,
-          },
-        },
-      );
-    }
-
-    const updatedBook = await Book.findOne({
-      where: { id: book_id },
-    });
-
-    return updatedBook;
+    await bookDoc.update(updateData);
+    return bookDoc;
   } catch (error) {
     throw new ApiError(
       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
@@ -187,6 +161,7 @@ const getAllBooks = async (body) => {
 
 const getBookById = async (body, params) => {
   try {
+    const { user } = body;
     const { bookId } = params;
 
     if (!bookId) {
@@ -199,6 +174,7 @@ const getBookById = async (body, params) => {
     const bookDoc = await Book.findOne({
       where: {
         id: bookId,
+        user_id: user.id,
         is_active: 1,
       },
       include: [
@@ -432,7 +408,6 @@ const removeBooks = async (body) => {
 };
 
 const bookEventUpdate = async (body) => {
-  console.log(body, "body");
 
   const transaction = await sequelize.transaction();
 
@@ -764,7 +739,7 @@ const checkPlagiarism = async (body) => {
     const options = {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.GOWINSTON_API_KEY}`,
+        Authorization: `Bearer ${config.GOWINSTON_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -775,7 +750,6 @@ const checkPlagiarism = async (body) => {
       }),
     };
 
-    console.log("Using key:", process.env.GOWINSTON_API_KEY);
     const plagiarismRes = await fetch(
       "https://api.gowinston.ai/v2/plagiarism",
       options,
@@ -783,7 +757,6 @@ const checkPlagiarism = async (body) => {
 
     let plagiarismData = await plagiarismRes.json();
 
-    console.log(plagiarismData, "plagiarismData");
 
     if (plagiarismData?.response?.error === "INSUFFICIENT_CREDIT") {
       throw new ApiError(
@@ -793,7 +766,7 @@ const checkPlagiarism = async (body) => {
     }
 
     if (!plagiarismData || !plagiarismData.result) {
-      console.error("Invalid API response:", plagiarismData);
+      console.error("Invalid plagiarism API response");
 
       throw new ApiError(
         500,
@@ -898,7 +871,6 @@ const factCheckingForChapter = async (body) => {
     // ✅ STEP 1: Run AI OUTSIDE transaction
     // =========================================================
     const factCheckResult = await factCheckChapter(cleanText);
-    console.log("🧠 Fact check result:", factCheckResult);
 
     // ✅ Validate response
     if (!factCheckResult || !Array.isArray(factCheckResult)) {
@@ -979,7 +951,7 @@ const factCheckingForChapter = async (body) => {
       console.log("❌ Transaction rolled back");
     }
 
-    console.log("❌ factCheckingForChapter error:", error);
+    console.log("❌ factCheckingForChapter error:", error.message);
 
     throw new ApiError(
       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
@@ -992,7 +964,7 @@ const generateConsistencySummary = async (issues, score) => {
   const response = await axios.post(
     "https://api.x.ai/v1/chat/completions",
     {
-      model: LLM_MODELS.grok,
+      model: config.models.grok,
       messages: [
         {
           role: "system",
@@ -1032,11 +1004,10 @@ Return ONLY plain text.
 
 const bookConsistancyCheck = async (body) => {
   try {
-    const transaction = await sequelize.transaction();
     const { user, book_id } = body;
 
     const bookDoc = await Book.findOne({
-      where: { id: book_id, is_active: 1 },
+      where: { id: book_id, user_id: user.id, is_active: 1 },
       include: [
         {
           model: BookSubmissionRequest,
@@ -1078,7 +1049,7 @@ const bookConsistancyCheck = async (body) => {
       throw new ApiError(httpStatus.NOT_FOUND, "Book details not found");
     }
 
-    const userDoc = await User.findByPk(user.id, { transaction });
+    const userDoc = await User.findByPk(user.id);
 
     if (!userDoc || userDoc.total_credit < 1) {
       throw new ApiError(400, "Insufficient credits");
@@ -1166,26 +1137,23 @@ const bookConsistancyCheck = async (body) => {
 
     finalResult.summary = summary;
 
-    // ✅ Deduct credit only after success
-    await userDoc.decrement("total_credit", { by: 1, transaction });
-
-    await UserCreditSpending.create(
-      {
-        user_id: user.id,
-        credit_spent: 1,
-        remaining_credit: remainingCredit,
-        event_name: "consistency_check",
-      },
-      { transaction },
-    );
-
-    await transaction.commit();
-
-    console.log(finalResult, "finalResult");
+    // ✅ Deduct credit only after success (managed transaction rolls back on error)
+    await sequelize.transaction(async (transaction) => {
+      await userDoc.decrement("total_credit", { by: 1, transaction });
+      await UserCreditSpending.create(
+        {
+          user_id: user.id,
+          credit_spent: 1,
+          remaining_credit: remainingCredit,
+          event_name: "consistency_check",
+        },
+        { transaction },
+      );
+    });
 
     return finalResult;
   } catch (error) {
-    console.log("factCheckingForChapter error:", error);
+    console.log("bookConsistancyCheck error:", error.message);
 
     throw new ApiError(
       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
@@ -1196,24 +1164,17 @@ const bookConsistancyCheck = async (body) => {
 
 const generateChapterSummary = async (body) => {
   try {
-    const transaction = await sequelize.transaction();
     const { user, chapter_id, book_id } = body;
 
-    const chapterDoc = await Chapter.findOne({
-      where: {
-        book_id: book_id,
-        id: chapter_id,
-        is_active: 1,
-      },
-    });
+    const chapterDoc = await findOwnedChapter(chapter_id, user);
 
-    if (!chapterDoc) {
+    if (!chapterDoc || String(chapterDoc.book_id) !== String(book_id)) {
       throw new ApiError(httpStatus.NOT_FOUND, "Chapter details not found");
     }
     if (!chapterDoc?.content) {
       throw new ApiError(httpStatus.NOT_FOUND, "Chapter content not available");
     }
-    const userDoc = await User.findByPk(user.id, { transaction });
+    const userDoc = await User.findByPk(user.id);
 
     if (!userDoc || Number(userDoc.total_credit) < 0.25) {
       throw new ApiError(httpStatus.BAD_REQUEST, "Insufficient credits");
@@ -1240,27 +1201,27 @@ const generateChapterSummary = async (body) => {
         "Invalid JSON returned from AI",
       );
     }
-    await userDoc.decrement("total_credit", {
-      by: 0.25,
-      transaction,
+    await sequelize.transaction(async (transaction) => {
+      await userDoc.decrement("total_credit", {
+        by: 0.25,
+        transaction,
+      });
+
+      // store credit log
+      await UserCreditSpending.create(
+        {
+          user_id: user.id,
+          credit_spent: 0.25,
+          remaining_credit: remainingCredit,
+          event_name: "generate_summary",
+        },
+        { transaction },
+      );
     });
-
-    // store credit log
-    await UserCreditSpending.create(
-      {
-        user_id: user.id,
-        credit_spent: 0.25,
-        remaining_credit: remainingCredit,
-        event_name: "generate_summary",
-      },
-      { transaction },
-    );
-
-    await transaction.commit();
 
     return parsedResult;
   } catch (error) {
-    console.log("factCheckingForChapter error: ", error);
+    console.log("generateChapterSummary error:", error.message);
     throw new ApiError(
       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
       error.message || "Plagiarism check failed",
@@ -1274,7 +1235,7 @@ const runPlagiarismCheck = async (text) => {
   const options = {
     method: "POST",
     headers: {
-      Authorization: `Bearer LcOpGqzr3iEO5bk5tlXwv5sgmJFVr4bw8UDP3kTa803a819b`,
+      Authorization: `Bearer ${config.GOWINSTON_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -1408,7 +1369,7 @@ const generateChapterSummaryAdmin = async (body) => {
 
     return result;
   } catch (error) {
-    console.log("generateChapterSummaryAdmin error:", error);
+    console.log("generateChapterSummaryAdmin error:", error.message);
 
     throw new ApiError(
       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
@@ -1440,7 +1401,7 @@ const factCheckingForChapterAdmin = async (text) => {
 
     return result;
   } catch (error) {
-    console.log("factCheckingForChapterAdmin error:", error);
+    console.log("factCheckingForChapterAdmin error:", error.message);
 
     throw new ApiError(
       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
@@ -1520,7 +1481,7 @@ const bookConsistencyCheckAdmin = async (book_id) => {
 
     return result;
   } catch (error) {
-    console.log("bookConsistencyCheckAdmin error:", error);
+    console.log("bookConsistencyCheckAdmin error:", error.message);
 
     throw new ApiError(
       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,

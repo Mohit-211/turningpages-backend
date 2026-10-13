@@ -2,7 +2,6 @@ const { status: httpStatus } = require('http-status');
 
 const validatePassword = require('../../helpers/validatePassword');
 const catchAsync = require('../../utils/catchAsync');
-const ApiError = require('../../utils/ApiError');
 const { userAuthService } = require('../../services');
 const pick = require('../../utils/pick');
 const responseWrapper = require('../../config/responseWrapper');
@@ -11,17 +10,13 @@ const responseWrapper = require('../../config/responseWrapper');
 const sendOTP = catchAsync(async (req, res) => {
 
     const body = pick(req.body, ['email', 'type']);
-    const headers = pick(req.headers, ['role_id']);
-    let response = await userAuthService.sendOTP(body, headers);
-    return responseWrapper(res, response, 'OTP has been Sent To Your Email');
+    let response = await userAuthService.sendOTP(body);
+    return responseWrapper(res, response, 'If an account exists for this email, an OTP has been sent.');
 });
 
 const verifyOTP = catchAsync(async (req, res) => {
 
-    const status = await userAuthService.verifyOTP(req.body.email, req.body.otp, req.body.type, req.headers.role_id);
-    if (!status) {
-        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Ineternal Server Error');
-    };
+    const status = await userAuthService.verifyOTP(req.body.email, req.body.otp, req.body.type);
     return responseWrapper(res, status, 'OTP has been verified. Please Create Your Profile.', httpStatus.OK);
 
 });
@@ -29,17 +24,8 @@ const verifyOTP = catchAsync(async (req, res) => {
 const register = catchAsync(async (req, res) => {
 
     const body = pick(req.body, ['name','last_name', 'email', 'mobile', 'password', 'confirm_password']);
-    const headers = pick(req.headers, ['role_id']);
-    console.log(body,"bodyyyyy")
-    let response = await userAuthService.register(body, headers);
+    let response = await userAuthService.register(body);
     return responseWrapper(res, response, 'User Created Successfully. Please Check Your Email to verify Your Account.', httpStatus.CREATED);
-});
-
-const singleSignOn = catchAsync(async (req, res) => {
-    const body = pick(req.body, ['name', 'email', 'provider', 'provider_id', 'ip_address']);
-    const headers = pick(req.headers, ['role_id', 'timezone']);
-    let response = await userAuthService.singleSignOn(body, headers);
-    return responseWrapper(res, response, '', httpStatus.OK);
 });
 
 const login = catchAsync(async (req, res) => {
@@ -66,7 +52,8 @@ const resetPassword = catchAsync(async (req, res) => {
 
 const forgotPassword = catchAsync(async (req, res) => {
 
-    const response = await userAuthService.forgotPassword(req.body);
+    const body = pick(req.body, ['email', 'token', 'password', 'confirm_password']);
+    const response = await userAuthService.forgotPassword(body);
     return responseWrapper(res, response, 'Password changed Successfully.');
 });
 
@@ -77,7 +64,6 @@ const logout = catchAsync(async (req, res) => {
 
 module.exports = {
     register,
-    singleSignOn,
     login,
     resetPassword,
     sendOTP,

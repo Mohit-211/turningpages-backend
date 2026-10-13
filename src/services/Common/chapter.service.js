@@ -12,10 +12,12 @@ const {
 } = require("../../models");
 const ApiError = require("../../utils/ApiError");
 const sequelize = require("../../config/central.db");
+const config = require("../../config/config");
 const OpenAI = require("openai");
+const { findOwnedBook, findOwnedChapter } = require("../../utils/ownership");
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: config.OPENAI_API_KEY,
 });
 
 const createChapter = async (body) => {
@@ -31,7 +33,7 @@ const createChapter = async (body) => {
       );
     }
 
-    const bookDoc = await Book.findByPk(book_id);
+    const bookDoc = await findOwnedBook(book_id, user);
     if (!bookDoc) {
       throw new ApiError(httpStatus.BAD_REQUEST, "Invalid book_id");
     }
@@ -93,21 +95,29 @@ const createChapter = async (body) => {
 
 const updateChapter = async (body) => {
   try {
-    const transaction = await sequelize.transaction();
     const { user, title, book_id, content, chapter_id } = body;
     if (!book_id || !chapter_id) {
       throw new ApiError(
-        httpStatus.INTERNAL_SERVER_ERROR,
+        httpStatus.BAD_REQUEST,
         "Please provide required fields: book_id, chapter_id",
       );
     }
-    const bookDoc = await Book.findByPk(book_id);
-    if (!bookDoc) {
-      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, "Invalid book_id");
+
+    const chapterDoc = await findOwnedChapter(chapter_id, user);
+    if (!chapterDoc || String(chapterDoc.book_id) !== String(book_id)) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Chapter not found or no changes made");
     }
-    let chapterObj = {
-      book_id: book_id,
-    };
+
+    // ============================
+    // 💰 CREDIT CHECK (1 credit), before anything is saved
+    // ============================
+    const userDoc = await User.findByPk(user.id);
+    if (!userDoc || userDoc.total_credit < 1) {
+      throw new ApiError(httpStatus.BAD_REQUEST, "Not enough credit");
+    }
+    const remainingCredit = userDoc.total_credit - 1;
+
+    const chapterObj = {};
     if (title) {
       chapterObj["title"] = title;
     }
@@ -115,56 +125,27 @@ const updateChapter = async (body) => {
       chapterObj["content"] = content;
       chapterObj["word_count"] = content.trim().split(/\s+/).length;
     }
-    const [updatedCount] = await Chapter.update(chapterObj, {
-      where: { id: chapter_id },
+
+    // Save, recount the book's words and charge the credit together
+    await sequelize.transaction(async (transaction) => {
+      await chapterDoc.update(chapterObj, { transaction });
+
+      const wordCount = await Chapter.sum("word_count", { where: { book_id }, transaction });
+      await Book.update({ word_count: wordCount || 0 }, { where: { id: book_id }, transaction });
+
+      await userDoc.decrement("total_credit", { by: 1, transaction });
+      await UserCreditSpending.create(
+        {
+          user_id: user.id,
+          credit_spent: 1,
+          remaining_credit: remainingCredit,
+          event_name: "update_chapter",
+        },
+        { transaction },
+      );
     });
 
-    if (updatedCount === 0) {
-      throw new ApiError(
-        httpStatus.NOT_FOUND,
-        "Chapter not found or no changes made",
-      );
-    }
-
-    const chapterDocs = await Chapter.findAll({ book_id });
-    if (chapterDocs) {
-      let wordCount = 0;
-      chapterDocs.map((chapter) => {
-        if (chapter.content) {
-          wordCount += chapter.content.trim().split(/\s+/).length;
-        }
-      });
-      bookDoc.word_count = wordCount;
-      await bookDoc.save();
-    }
-
-    // ============================
-    // 💰 CREDIT DEDUCTION (2 credits)
-    // ============================
-    const userDoc = await User.findByPk(user.id, { transaction });
-
-    if (!userDoc || userDoc.total_credit < 1) {
-      throw new ApiError(httpStatus.BAD_REQUEST, "Not enough credit");
-    }
-
-    const remainingCredit = userDoc.total_credit - 1;
-
-    await userDoc.decrement("total_credit", { by: 1, transaction });
-
-    await UserCreditSpending.create(
-      {
-        user_id: user.id,
-        credit_spent: 1,
-        remaining_credit: remainingCredit,
-        event_name: "update_chapter",
-      },
-      { transaction },
-    );
-
-    await transaction.commit();
-
-    const updatedChapter = await Chapter.findByPk(chapter_id);
-    return updatedChapter;
+    return await Chapter.findByPk(chapter_id);
   } catch (error) {
     throw new ApiError(
       error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
@@ -175,6 +156,7 @@ const updateChapter = async (body) => {
 
 const getChapterById = async (body, params) => {
   try {
+    const { user } = body;
     const { chapterId } = params;
 
     if (!chapterId) {
@@ -193,6 +175,7 @@ const getChapterById = async (body, params) => {
         {
           model: Book,
           as: "chapter_book",
+          where: { user_id: user.id },
           attributes: [
             "id",
             "user_id",
@@ -237,12 +220,7 @@ const removeChapter = async (body) => {
       );
     }
 
-    const chapterDoc = await Chapter.findOne({
-      where: {
-        id: chapter_id,
-        is_active: 1,
-      },
-    });
+    const chapterDoc = await findOwnedChapter(chapter_id, user);
 
     if (!chapterDoc) {
       throw new ApiError(httpStatus.NOT_FOUND, "Chapter not found");
@@ -258,14 +236,13 @@ const removeChapter = async (body) => {
   }
 };
 
-const removeBookCover = async (id) => {
+const removeBookCover = async (id, body) => {
   try {
-    const book = await Book.findOne({
-      where: {
-        id,
-        is_active: 1,
-      },
-    });
+    const { user, authType } = body;
+    const book =
+      authType === "admin"
+        ? await Book.findOne({ where: { id, is_active: 1 } })
+        : await findOwnedBook(id, user);
 
     if (!book) {
       throw new ApiError(httpStatus.NOT_FOUND, "Book not found");
@@ -439,6 +416,7 @@ const chatWithAssistant = async (body) => {
       conversationDoc = await Conversation.findOne({
         where: {
           id: conversation_id,
+          user_id: user.id,
           is_active: true,
         },
       });
@@ -487,7 +465,7 @@ const chatWithAssistant = async (body) => {
     // OPENAI RESPONSE
     // ===============================
     const response = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
+      model: config.models.openaiChat,
       messages: formattedMessages,
       temperature: 0.7,
       max_tokens: 4000,
@@ -534,8 +512,15 @@ const createConversation = async (body) => {
   }
 };
 
-const getConversationMessages = async (conversation_id) => {
+const getConversationMessages = async (conversation_id, user) => {
   try {
+    const conversationDoc = await Conversation.findOne({
+      where: { id: conversation_id, user_id: user.id, is_active: true },
+    });
+    if (!conversationDoc) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Conversation not found");
+    }
+
     const messages = await ConversationMessage.findAll({
       where: {
         conversation_id,

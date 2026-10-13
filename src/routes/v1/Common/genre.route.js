@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const { genreController } = require('../../../controllers');
-const { adminAuthMiddleware, userAuthMiddleware } = require('../../../middlewares');
+const { adminAuthMiddleware } = require('../../../middlewares');
 
 router.post('/', [adminAuthMiddleware.validateJWTtoken, adminAuthMiddleware.isSuperAdmin], genreController.createGenre);
 router.get('/', genreController.getAllGenres);

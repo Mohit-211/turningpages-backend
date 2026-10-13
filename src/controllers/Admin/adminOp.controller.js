@@ -11,7 +11,7 @@ const getAllBooks = catchAsync(async (req, res) => {
 });
 
 const getBookDetails = catchAsync(async (req, res) => {
-    const result = await adminOpService.getBookDetails(req.params);
+    const result = await adminOpService.getBookDetails(req.params, req.body);
     return responseWrapper(res, result);
 });
 
@@ -127,7 +127,7 @@ const deleteUserById = catchAsync(async (req, res) => {
 
 
 const deleteEditorById = catchAsync(async (req, res) => {
-    const genre = await adminOpService.deleteEditorById(req.params.id);
+    const genre = await adminOpService.deleteEditorById(req.params.id, req.body.user);
     return responseWrapper(res, genre);
 });
 

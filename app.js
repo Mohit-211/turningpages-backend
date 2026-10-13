@@ -11,7 +11,8 @@ const app = express();
 const config = require("./src/config/config.js");
 const routes = require("./src/routes/v1");
 const morgan = require("./src/config/morgan.js");
-const { authLimiter } = require("./src/middlewares/rateLimiter.js");
+const { authLimiter, otpLimiter } = require("./src/middlewares/rateLimiter.js");
+const { adminAuthMiddleware } = require("./src/middlewares");
 const corsConfigs = require("./src/config/corsConfigs.js");
 const ApiError = require("./src/utils/ApiError.js");
 const errorHandler = require("./src/utils/errorHandler.js");
@@ -20,6 +21,9 @@ const handleFileUploads = require("./src/config/multer.js");
 const { paymentController } = require("./src/controllers/index.js");
 
 require("./src/models");
+
+// Number of reverse proxies in front of the app, so req.ip is the real client IP
+app.set("trust proxy", config.trustProxy);
 
 const PUBLIC_DIR = path.resolve(__dirname, "./public");
 const STORAGE_DIR = config.STORAGE_DIR;
@@ -64,11 +68,15 @@ app.post(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Express 5 leaves req.body undefined when there is no body; the auth middleware writes to it
-app.use((req, res, next) => {
+// These fields are set by the auth middleware only; never accept them from the client
+const RESERVED_BODY_FIELDS = ["user", "tokenDoc", "otpDoc", "ip_address", "authType"];
+const stripReservedFields = (req, res, next) => {
+  // Express 5 leaves req.body undefined when there is no body; the auth middleware writes to it
   req.body ??= {};
+  for (const field of RESERVED_BODY_FIELDS) delete req.body[field];
   next();
-});
+};
+app.use(stripReservedFields);
 
 // Gzip compression
 app.use(compression());
@@ -85,9 +93,18 @@ app.use(express.static(PUBLIC_DIR));
 // CORS
 app.use(cors(corsConfigs));
 
-// Limit repeated failed requests to auth endpoints
-if (config.env === "production") {
-  app.use("/v1/auth", authLimiter);
+// Brute-force protection for auth endpoints
+if (config.env !== "test") {
+  app.use(["/api/v1/user/auth", "/api/v1/admin/auth"], authLimiter);
+  app.use(
+    [
+      "/api/v1/user/auth/otp",
+      "/api/v1/user/auth/verify-otp",
+      "/api/v1/admin/auth/otp",
+      "/api/v1/admin/auth/verify-otp",
+    ],
+    otpLimiter,
+  );
 }
 
 // Health check
@@ -102,11 +119,13 @@ app.get("/test", (req, res) => {
   res.status(200).send("Hello World !!");
 });
 
-// API routes
-app.use("/api/v1", handleFileUploads, routes);
+// API routes (multipart bodies are parsed by multer, so strip reserved fields again afterwards)
+app.use("/api/v1", handleFileUploads, stripReservedFields, routes);
+
+const superAdminOnly = [adminAuthMiddleware.validateJWTtoken, adminAuthMiddleware.isSuperAdmin];
 
 // Read current day's logs
-app.get("/api/v1/logs", (req, res) => {
+app.get("/api/v1/logs", superAdminOnly, (req, res) => {
   const currentDate = DateTime.now().toFormat("yyyy-MM-dd");
   const logFileName = `${currentDate}.log`;
   const logFilePath = path.join(__dirname, "logs", logFileName);
@@ -122,7 +141,7 @@ app.get("/api/v1/logs", (req, res) => {
 });
 
 // Delete all log files
-app.delete("/api/v1/logs", async (req, res) => {
+app.delete("/api/v1/logs", superAdminOnly, async (req, res) => {
   const logDirectory = path.join(__dirname, "logs");
 
   fs.readdir(logDirectory, async (err, files) => {

@@ -25,12 +25,24 @@ const ApiError = require("../../utils/ApiError");
 const { bookStatus, userStatusTypes } = require("../../config/types");
 const { participantRoles } = require("../../models/chatParticipant.model");
 const { sendUserCredentials } = require("../Common/email.service");
+const config = require("../../config/config");
+
+// Super admins may act on any book; other admins only on books assigned to them
+const assertCanEditBook = async (user, bookId) => {
+  if (user.role_id === config.SUP_ADM_ROLE_ID) return;
+  const assignment = await AssignBookEditor.findOne({
+    where: { book_id: bookId, editor_id: user.id, is_active: true },
+  });
+  if (!assignment) {
+    throw new ApiError(httpStatus.FORBIDDEN, "You are not assigned to this book");
+  }
+};
 
 const getAllBooks = async (body, query) => {
   try {
     const { user } = body;
     let where = {};
-    if (user.role_id !== 1) {
+    if (user.role_id !== config.SUP_ADM_ROLE_ID) {
       where["editor_id"] = user.id;
     }
 
@@ -95,7 +107,7 @@ const getAllBooks = async (body, query) => {
             "is_active",
           ],
           where: where,
-          required: user.role_id !== 1 ? true : false,
+          required: user.role_id !== config.SUP_ADM_ROLE_ID ? true : false,
           include: [
             {
               model: Admin,
@@ -154,9 +166,10 @@ const getAllBooks = async (body, query) => {
   }
 };
 
-const getBookDetails = async (params) => {
+const getBookDetails = async (params, body) => {
   try {
     const { bookId } = params;
+    await assertCanEditBook(body.user, bookId);
     let include = [
       {
         model: Profile,
@@ -473,7 +486,7 @@ const createUserWithCredentials = async (body) => {
     const trimmedName = name.trim();
 
     const existingUser = await User.findOne({
-      where: { email: normalizedEmail, is_active: true, role_id: 6 },
+      where: { email: normalizedEmail, is_active: true, role_id: config.USR_ROLE_ID },
       transaction: t,
     });
 
@@ -492,7 +505,7 @@ const createUserWithCredentials = async (body) => {
         password: hashedPassword,
         status: "ACCEPTED",
         is_active: true,
-        role_id: 6,
+        role_id: config.USR_ROLE_ID,
       },
       { transaction: t },
     );
@@ -519,7 +532,6 @@ const createUserWithCredentials = async (body) => {
       id: newUser.id,
       name: trimmedName,
       email: newUser.email,
-      password,
       status: newUser.status,
       is_active: newUser.is_active,
     };
@@ -673,7 +685,7 @@ const getAllEditQueueData = async (body) => {
   try {
     const { user } = body;
     let where = {};
-    if (user.role_id !== 1) {
+    if (user.role_id !== config.SUP_ADM_ROLE_ID) {
       where["editor_id"] = user.id;
     }
     let include = [
@@ -734,7 +746,7 @@ const getAllEditQueueData = async (body) => {
             "is_active",
           ],
           where: where,
-          required: user.role_id !== 1 ? true : false,
+          required: user.role_id !== config.SUP_ADM_ROLE_ID ? true : false,
           include: [
             {
               model: Admin,
@@ -817,15 +829,15 @@ const getEditorStats = async () => {
     });
 
     const superAdmins = await Admin.count({
-      where: { role_id: 1, is_active: 1 },
+      where: { role_id: config.SUP_ADM_ROLE_ID, is_active: 1 },
     });
 
     const seniorEditors = await Admin.count({
-      where: { role_id: 7, is_active: 1 },
+      where: { role_id: config.SENIOR_EDITOR_ROLE_ID, is_active: 1 },
     });
 
     const assistantEditors = await Admin.count({
-      where: { role_id: 8, is_active: 1 },
+      where: { role_id: config.ASSISTANT_EDITOR_ROLE_ID, is_active: 1 },
     });
 
     return {
@@ -879,10 +891,14 @@ const updateUserStatus = async (reqBody) => {
 };
 
 const updateEditorStatus = async (reqBody) => {
-  const { editorId, status } = reqBody;
+  const { editorId, status, user } = reqBody;
 
   if (!editorId || !status) {
     throw new ApiError(400, "editorId and status are required.");
+  }
+
+  if (String(editorId) === String(user.id)) {
+    throw new ApiError(400, "You cannot change the status of your own account.");
   }
 
   const editor = await Admin.findOne({ where: { id: editorId } });
@@ -931,6 +947,7 @@ const bookDeliver = async (body, files) => {
     if (!bookDoc) {
       throw new ApiError(httpStatus.NOT_FOUND, "Book details not found");
     }
+    await assertCanEditBook(user, book_id);
     bookDoc.status = "completed";
     bookDoc.editor_notes = editor_notes;
 
@@ -966,59 +983,11 @@ const updateBook = async (body) => {
       );
     }
 
-    let where = {};
-    if (user.role_id !== 1) {
-      where["editor_id"] = user.id;
-    }
-
-    const bookDoc = await Book.findOne({
-      where: { id: book_id },
-      include: [
-        {
-          model: AssignBookEditor,
-          as: "book_editors",
-          attributes: [
-            "id",
-            "book_id",
-            "editor_id",
-            "assigned_by",
-            "is_active",
-          ],
-          where: where,
-          required: user.role_id !== 1 ? true : false,
-          include: [
-            {
-              model: Admin,
-              as: "editor",
-              attributes: [
-                "id",
-                "name",
-                "email",
-                "role_id",
-                "department_id",
-                "is_active",
-              ],
-              include: [
-                {
-                  model: Role,
-                  as: "admin_role",
-                  attributes: ["id", "name", "abbreviation"],
-                },
-                {
-                  model: Department,
-                  as: "admin_department",
-                  attributes: ["id", "name"],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    });
-
+    const bookDoc = await Book.findOne({ where: { id: book_id, is_active: 1 } });
     if (!bookDoc) {
       throw new ApiError(httpStatus.NOT_FOUND, "No book found");
     }
+    await assertCanEditBook(user, book_id);
 
     const updateData = {};
 
@@ -1035,15 +1004,8 @@ const updateBook = async (body) => {
     if (description) updateData.description = description;
     if (author) updateData.author = author;
 
-    await Book.update(updateData, {
-      where: { id: book_id, user_id: user.id },
-    });
-
-    const updatedBook = await Book.findOne({
-      where: { id: book_id, user_id: user.id },
-    });
-
-    return updatedBook;
+    await bookDoc.update(updateData);
+    return bookDoc;
   } catch (error) {
     throw new ApiError(
       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
@@ -1057,66 +1019,21 @@ const updateChapter = async (body) => {
     const { user, title, book_id, content, chapter_id } = body;
     if (!book_id || !chapter_id) {
       throw new ApiError(
-        httpStatus.INTERNAL_SERVER_ERROR,
+        httpStatus.BAD_REQUEST,
         "Please provide required fields: book_id, chapter_id",
       );
     }
-    let where = {};
-    if (user.role_id !== 1) {
-      where["editor_id"] = user.id;
-    }
 
-    const bookDoc = await Book.findOne({
-      where: { id: book_id },
-      include: [
-        {
-          model: AssignBookEditor,
-          as: "book_editors",
-          attributes: [
-            "id",
-            "book_id",
-            "editor_id",
-            "assigned_by",
-            "is_active",
-          ],
-          where: where,
-          required: user.role_id !== 1 ? true : false,
-          include: [
-            {
-              model: Admin,
-              as: "editor",
-              attributes: [
-                "id",
-                "name",
-                "email",
-                "role_id",
-                "department_id",
-                "is_active",
-              ],
-              include: [
-                {
-                  model: Role,
-                  as: "admin_role",
-                  attributes: ["id", "name", "abbreviation"],
-                },
-                {
-                  model: Department,
-                  as: "admin_department",
-                  attributes: ["id", "name"],
-                },
-              ],
-            },
-          ],
-        },
-      ],
+    // The chapter must belong to the given book (chapters cannot be moved between books)
+    const chapterDoc = await Chapter.findOne({
+      where: { id: chapter_id, book_id, is_active: 1 },
     });
-    if (!bookDoc) {
-      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, "Invalid book_id");
+    if (!chapterDoc) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Chapter not found or no changes made");
     }
+    await assertCanEditBook(user, book_id);
 
-    let chapterObj = {
-      book_id: book_id,
-    };
+    const chapterObj = {};
     if (title) {
       chapterObj["title"] = title;
     }
@@ -1124,31 +1041,14 @@ const updateChapter = async (body) => {
       chapterObj["content"] = content;
       chapterObj["word_count"] = content.trim().split(/\s+/).length;
     }
-    const [updatedCount] = await Chapter.update(chapterObj, {
-      where: { id: chapter_id },
+
+    await sequelize.transaction(async (transaction) => {
+      await chapterDoc.update(chapterObj, { transaction });
+      const wordCount = await Chapter.sum("word_count", { where: { book_id }, transaction });
+      await Book.update({ word_count: wordCount || 0 }, { where: { id: book_id }, transaction });
     });
 
-    if (updatedCount === 0) {
-      throw new ApiError(
-        httpStatus.NOT_FOUND,
-        "Chapter not found or no changes made",
-      );
-    }
-
-    const chapterDocs = await Chapter.findAll({ book_id });
-    if (chapterDocs) {
-      let wordCount = 0;
-      chapterDocs.map((chapter) => {
-        if (chapter.content) {
-          wordCount += chapter.content.trim().split(/\s+/).length;
-        }
-      });
-      bookDoc.word_count = wordCount;
-      await bookDoc.save();
-    }
-
-    const updatedChapter = await Chapter.findByPk(chapter_id);
-    return updatedChapter;
+    return await Chapter.findByPk(chapter_id);
   } catch (error) {
     throw new ApiError(
       error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
@@ -1160,7 +1060,7 @@ const updateChapter = async (body) => {
 const getAllPayments = async (body, query) => {
   try {
     const { user } = body;
-    if (user.role_id !== 1) {
+    if (user.role_id !== config.SUP_ADM_ROLE_ID) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
         "You are not authorized to call this route",
@@ -1193,7 +1093,7 @@ const getAllPayments = async (body, query) => {
 const getPaymentDetails = async (body) => {
   try {
     const { payment_id, user } = body;
-    if (user.role_id !== 1) {
+    if (user.role_id !== config.SUP_ADM_ROLE_ID) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
         "You are not authorized to call this route",
@@ -1233,7 +1133,7 @@ const adjustUserCredit = async (body) => {
     }
 
     // Only admin access
-    if (!user || user.role_id !== 1) {
+    if (!user || user.role_id !== config.SUP_ADM_ROLE_ID) {
       throw new ApiError(
         httpStatus.FORBIDDEN,
         "Only admin can access this route"
@@ -1347,6 +1247,7 @@ const adminBookSubmissionAction = async (body) => {
     if (!bookDoc) {
       throw new ApiError(httpStatus.NOT_FOUND, "Book not found");
     }
+    await assertCanEditBook(body.user, book_id);
 
     // ✅ Only allow transition from in-editing → feedback
     if (bookDoc.status !== "in-editing") {
@@ -1422,8 +1323,11 @@ const deleteUserById = async (userId) => {
   }
 };
 
-const deleteEditorById = async (editorId) => {
+const deleteEditorById = async (editorId, user) => {
   try {
+    if (String(editorId) === String(user.id)) {
+      throw new ApiError(httpStatus.BAD_REQUEST, "You cannot delete your own account");
+    }
     const editor = await Admin.findOne({
       where: { id: editorId, is_active: 1 },
     });

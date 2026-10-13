@@ -169,7 +169,7 @@ const getFeeds = async (body, query) => {
 						{
 							model: Profile,
 							as: "user_profile",
-							attributes: ["id", "name", "mobile", "is_active", "created_at"],
+							attributes: ["id", "name", "is_active", "created_at"],
 						},
 						{
 							model: UserAttachment,
@@ -238,7 +238,7 @@ const getFeedById = async (body, feed_id) => {
 						{
 							model: Profile,
 							as: "user_profile",
-							attributes: ["id", "name", "mobile", "is_active", "created_at"],
+							attributes: ["id", "name", "is_active", "created_at"],
 						},
 						{
 							model: UserAttachment,
@@ -320,7 +320,7 @@ const getMyFeeds = async (body, query) => {
 								{
 									model: Profile,
 									as: "user_profile",
-									attributes: ["id", "name", "mobile"],
+									attributes: ["id", "name"],
 								},
 							],
 						},
@@ -334,7 +334,7 @@ const getMyFeeds = async (body, query) => {
 						{
 							model: Profile,
 							as: "user_profile",
-							attributes: ["id", "name", "mobile", "is_active", "created_at"],
+							attributes: ["id", "name", "is_active", "created_at"],
 						},
 						{
 							model: UserAttachment,
@@ -472,7 +472,7 @@ const getFeedComments = async (feed_id) => {
 						{
 							model: Profile,
 							as: "user_profile",
-							attributes: ["id", "name", "mobile", "is_active", "created_at"],
+							attributes: ["id", "name", "is_active", "created_at"],
 						},
 						{
 							model: UserAttachment,
@@ -556,7 +556,6 @@ const toggleLikeFeed = async (body, feed_id) => {
 
 const getAllFeeds = async (query) => {
 	try {
-		console.log("QUERY RECEIVED:", query);
 		const page = Number(query.page) || 1;
 		const limit = Number(query.limit) || 10;
 		const offset = (page - 1) * limit;
@@ -583,7 +582,7 @@ const getAllFeeds = async (query) => {
 						{
 							model: Profile,
 							as: "user_profile",
-							attributes: ["id", "name", "mobile"],
+							attributes: ["id", "name"],
 						},
 						{
 							model: UserAttachment,
@@ -642,7 +641,7 @@ const getFeedByIdForAdmin = async (feed_id) => {
 								{
 									model: Profile,
 									as: "user_profile",
-									attributes: ["id", "name", "mobile"],
+									attributes: ["id", "name"],
 								},
 							],
 						},
@@ -662,7 +661,7 @@ const getFeedByIdForAdmin = async (feed_id) => {
 								{
 									model: Profile,
 									as: "user_profile",
-									attributes: ["id", "name", "mobile"],
+									attributes: ["id", "name"],
 								},
 							],
 						},
@@ -682,7 +681,7 @@ const getFeedByIdForAdmin = async (feed_id) => {
 						{
 							model: Profile,
 							as: "user_profile",
-							attributes: ["id", "name", "mobile"],
+							attributes: ["id", "name"],
 						},
 						{
 							model: UserAttachment,
