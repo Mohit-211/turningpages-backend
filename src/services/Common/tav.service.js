@@ -1,15 +1,20 @@
 const { status: httpStatus } = require("http-status");
 const ApiError = require("../../utils/ApiError");
 const { Book, Chapter, Genre, User, Profile } = require("../../models");
-const { GoogleGenAI } = require("@google/genai");
+const { ai, ThinkingLevel } = require("../../config/geminiConfig");
+const config = require("../../config/config");
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+// JSON output keeps every response parseable. Gemini 3 is tuned for its default temperature,
+// so none is set; medium thinking balances analysis quality against cost.
+const ANALYSIS_CONFIG = {
+  responseMimeType: "application/json",
+  thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+};
 
 const CHUNK_SIZE = 2;
 
-const runTavAnalysis = async (book_id) => {
+// Users may analyse only their own books; admins may analyse any book
+const runTavAnalysis = async (book_id, { user, authType }) => {
   try {
 
     if (!book_id) {
@@ -20,6 +25,7 @@ const runTavAnalysis = async (book_id) => {
       where: {
         id: book_id,
         is_active: 1,
+        ...(authType === "admin" ? {} : { user_id: user.id }),
       },
       include: [
         {
@@ -222,11 +228,9 @@ Return ONLY valid JSON.
 `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: config.models.geminiText,
       contents: prompt,
-      config: {
-        temperature: 0.2,
-      },
+      config: ANALYSIS_CONFIG,
     });
 
     const text = response.text || "";
@@ -390,7 +394,7 @@ const buildReportHeader = (bookDoc, manuscriptStatus) => {
 
     tav_version: "1.0",
 
-    model: "gemini-2.5-flash",
+    model: config.models.geminiText,
 
     manuscript_status: manuscriptStatus,
 
@@ -518,11 +522,9 @@ Return ONLY valid JSON.
 }
 `;
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: config.models.geminiText,
     contents: prompt,
-    config: {
-      temperature: 0.2,
-    },
+    config: ANALYSIS_CONFIG,
   });
 
   const result = parseGeminiJSON(response.text || "");
@@ -770,23 +772,18 @@ Return ONLY valid JSON.
     console.log("Calling Gemini for Final Report...");
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: config.models.geminiText,
       contents: prompt,
-      config: {
-        temperature: 0.2,
-      },
+      config: ANALYSIS_CONFIG,
     });
 
     console.log("Gemini Final Report Generated");
 
-    console.log("========== GEMINI RESPONSE ==========");
-console.log(response.text);
-console.log("====================================");
 
     const report = parseGeminiJSON(response.text || "");
 
     report.metadata = {
-      model_version: "gemini-2.5-flash",
+      model_version: config.models.geminiText,
       analysis_mode: "full",
       word_count_estimate: chapterMap.book.total_words,
       certification_rule_applied: true,

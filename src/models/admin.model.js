@@ -52,6 +52,23 @@ Admin.init({
         type: DataTypes.BOOLEAN,
         defaultValue: true
     },
+    otp_expires_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+    },
+    otp_attempts: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+    },
+    reset_token_expires_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+    },
+    password_changed_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+    },
     is_active: {
         type: DataTypes.BOOLEAN,
         defaultValue: true
@@ -88,10 +105,11 @@ Admin.init({
     deletedAt: 'deleted_at'
 });
 
-Admin.afterCreate(async (admin) => {
+Admin.afterCreate(async (admin, options) => {
     const socketId = `${admin.role_id}-${admin.id}-${admin.department_id}-socketId`;
     admin.socket_id = socketId;
-    await admin.save();
+    // Reuse the caller's transaction so the save does not wait on the INSERT's row lock
+    await admin.save({ transaction: options.transaction });
 });
 
 Admin.isEmailTaken = async function (email) {

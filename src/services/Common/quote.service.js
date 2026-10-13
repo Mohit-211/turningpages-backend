@@ -9,7 +9,6 @@ const createQuote = async (body) => {
 	try {
 		const { author, quote, desc, tags, add_type, quotes } = body;
 
-		console.log("QUOTES INPUT:", quotes);
 
 		// ✅ VALIDATE TYPE
 		if (!add_type || !["single", "multiple"].includes(add_type)) {
@@ -142,7 +141,7 @@ const createQuote = async (body) => {
 							await quoteInstance.setQuoteTags(uniqueTagIds);
 						}
 					} catch (err) {
-						console.error("TAG PROCESS ERROR:", err);
+						console.error("Quote tag processing error:", err.message);
 					}
 				})
 			);
@@ -150,8 +149,7 @@ const createQuote = async (body) => {
 			return createdQuotes;
 		}
 	} catch (error) {
-	console.error("FULL ERROR:", error);
-	console.error("STACK:", error.stack);
+	console.error("createQuote error:", error.message);
 
 	throw new ApiError(
 		error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,

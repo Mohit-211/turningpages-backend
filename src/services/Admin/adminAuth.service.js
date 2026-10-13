@@ -2,300 +2,246 @@
 
 const { status: httpStatus } = require("http-status");
 const bcrypt = require("bcryptjs");
-const generateOtp = require("../../utils/generateOtp");
+const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 
 const { Admin, Department, Role } = require("../../models");
+const sequelize = require("../../config/central.db");
 const ApiError = require("../../utils/ApiError");
 const config = require("../../config/config");
-const { emailService } = require("../Common");
-const { otpTypes } = require("../../config/types");
-const { sendAdminCredentials } = require("../Common/email.service");
+const { tokenTypes } = require("../../config/types");
+const generateOtp = require("../../utils/generateOtp");
+const validatePassword = require("../../helpers/validatePassword");
+const { hashSecret, matchesHash, generateResetToken } = require("../../utils/secretHash");
+const { sendForgotPasswordOTP, sendAdminCredentials } = require("../Common/email.service");
+
+// Compared against when the email is unknown, so response time does not reveal which emails exist
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(generateResetToken(), 10);
+
+const profileInclude = [
+	{
+		model: Role,
+		as: "admin_role",
+		attributes: ["id", "name", "abbreviation"],
+	},
+	{
+		model: Department,
+		as: "admin_department",
+		attributes: ["id", "name"],
+	},
+];
+
+const signAdminToken = (admin) =>
+	jwt.sign(
+		{
+			id: admin.id,
+			role_id: admin.role_id,
+			department_id: admin.department_id,
+			type: tokenTypes.ADMIN,
+		},
+		config.jwt.secret,
+		{ algorithm: "HS256", expiresIn: config.jwt.adminExpiration },
+	);
 
 const createAdminUser = async (userBody) => {
-	try {
-		const password = Math.random().toString(36).substring(2, 12);
-		let salt = bcrypt.genSaltSync(10);
-		const userObj = {
-			name: userBody.name,
-			email: userBody.email,
-			password: bcrypt.hashSync(password, salt),
-			role_id: userBody.role_id,
-			department_id: userBody.department_id,
-		};
-		const user = await Admin.create(userObj);
+	// 16 random URL-safe characters; the admin is asked to change it after first login
+	const password = crypto.randomBytes(12).toString("base64url");
 
-		if (!user) {
-			throw new ApiError(
-				httpStatus.INTERNAL_SERVER_ERROR,
-				"Failed to create new admin",
-			);
-		}
-		let result = await Admin.findOne({
-			attributes: ["id", "name", "email", "role_id", "department_id"],
-			include: [
-				{
-					model: Role,
-					as: "admin_role",
-					attributes: ["id", "name", "abbreviation"],
-				},
-				{
-					model: Department,
-					as: "admin_department",
-					attributes: ["id", "name"],
-				},
-			],
+	const adminId = await sequelize.transaction(async (transaction) => {
+		const admin = await Admin.create(
+			{
+				name: userBody.name,
+				email: userBody.email,
+				password: await bcrypt.hash(password, 10),
+				role_id: userBody.role_id,
+				department_id: userBody.department_id,
+			},
+			{ transaction },
+		);
 
-			where: { id: user?.id, is_active: true },
-		});
-
-		let isSend = await sendAdminCredentials(userBody.email, password);
+		// Sending inside the transaction: if the email fails, the admin is not created
+		const isSend = await sendAdminCredentials(userBody.email, password);
 		if (!isSend) {
 			throw new ApiError(
 				httpStatus.INTERNAL_SERVER_ERROR,
 				"Unable to send Credentials to This Email",
 			);
 		}
-		if (!result)
-			throw new ApiError(httpStatus.BAD_REQUEST, "Failed to Get Profile.");
-		return result;
-	} catch (error) {
-		throw new ApiError(
-			error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
-			error.message,
-		);
-	}
+		return admin.id;
+	});
+
+	return Admin.findOne({
+		attributes: ["id", "name", "email", "role_id", "department_id"],
+		include: profileInclude,
+		where: { id: adminId, is_active: true },
+	});
 };
 
 const loginAdminUser = async (reqBody) => {
-	try {
-		const user = await Admin.findOne({
-			where: { email: reqBody.email, is_active: true },
-		});
+	const user = await Admin.findOne({
+		where: { email: reqBody.email, is_active: true },
+	});
 
-		if (!user) {
-			throw new ApiError(httpStatus.BAD_REQUEST, "User not found.");
-		}
-
-		const validPass = await bcrypt.compare(reqBody.password, user.password);
-		if (!validPass) {
-			throw new ApiError(
-				httpStatus.BAD_REQUEST,
-				"Invalid password. Please try again.",
-			);
-		}
-
-		const token = jwt.sign(
-			{
-				id: user.id,
-				role_id: user.role_id,
-				department_id: user.department_id,
-				is_backlisted: false,
-			},
-			Buffer.from(config.jwt.secret, "hex"),
-			{ algorithm: "HS256", expiresIn: "5d" },
-		);
-		const response = {
-			id: user.id,
-			name: user.name,
-			email: user.email,
-			role_id: user.role_id,
-			token: token,
-		};
-		return response;
-	} catch (error) {
-		throw new ApiError(
-			error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
-			error.message,
-		);
+	const validPass = await bcrypt.compare(
+		String(reqBody.password),
+		user && user.password ? user.password : DUMMY_PASSWORD_HASH,
+	);
+	if (!user || !user.password || !validPass) {
+		throw new ApiError(httpStatus.BAD_REQUEST, "Invalid email or password. Please try again.");
 	}
+
+	return {
+		id: user.id,
+		name: user.name,
+		email: user.email,
+		role_id: user.role_id,
+		token: signAdminToken(user),
+	};
 };
 
 const resetAdminPassword = async (reqBody) => {
-	try {
-		const { old_password, confirm_password, user } = reqBody;
+	const { old_password, new_password, user } = reqBody;
 
-		const userDoc = await Admin.findByPk(user.id);
-
-		if (!userDoc) {
-			throw new ApiError(httpStatus.BAD_REQUEST, "User Not Found.");
-		}
-
-		const validPass = await bcrypt.compare(old_password, userDoc?.password);
-		if (!validPass) {
-			throw new ApiError(httpStatus.BAD_REQUEST, "Incorrect Old Password.");
-		}
-
-		let salt = bcrypt.genSaltSync(10);
-		const userObj = {
-			password: bcrypt.hashSync(confirm_password, salt),
-		};
-
-		const isUserPasswordUpdate = await Admin.update(userObj, {
-			where: { id: user?.id },
-		});
-
-		if (!isUserPasswordUpdate) {
-			throw new ApiError(
-				httpStatus.INTERNAL_SERVER_ERROR,
-				"Failed to Change Password.",
-			);
-		}
-		return "Password Changed Successfully.";
-	} catch (error) {
-		throw new ApiError(
-			error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
-			error.message,
-		);
+	const userDoc = await Admin.findByPk(user.id);
+	const validPass = userDoc?.password && (await bcrypt.compare(String(old_password), userDoc.password));
+	if (!validPass) {
+		throw new ApiError(httpStatus.BAD_REQUEST, "Incorrect Old Password.");
 	}
+
+	// Changing the password ends all existing admin sessions; this client gets a new token
+	await userDoc.update({
+		password: await bcrypt.hash(new_password, 10),
+		password_changed_at: new Date(),
+	});
+	return { token: signAdminToken(userDoc) };
 };
 
 const sendOTP = async (email) => {
-	try {
-		const user = await Admin.findOne({
-			where: { email: email, is_active: true },
-		});
-		if (!user) {
-			throw new ApiError(httpStatus.NOT_FOUND, "Invalid Email");
-		}
-		const generatedOTP = generateOtp(6);
-		await emailService.sendForgotPasswordOTP(email, generatedOTP);
+	const user = await Admin.findOne({
+		where: { email: email || "", is_active: true },
+	});
+	// Same response whether or not the account exists
+	if (!user) return true;
 
-		await Admin.update(
-			{ otp: generatedOTP, is_otp_valid: true },
-			{ where: { email: user.email } },
-		);
-		return true;
-	} catch (error) {
-		throw new ApiError(
-			error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
-			error.message,
-		);
+	if (user.otp_expires_at) {
+		const issuedAt = user.otp_expires_at.getTime() - config.otp.expirationMinutes * 60 * 1000;
+		const waitMs = issuedAt + config.otp.resendCooldownSeconds * 1000 - Date.now();
+		if (waitMs > 0) {
+			throw new ApiError(
+				httpStatus.TOO_MANY_REQUESTS,
+				`Please wait ${Math.ceil(waitMs / 1000)} seconds before requesting a new OTP.`,
+			);
+		}
 	}
+
+	const code = generateOtp(config.otp.length);
+	await user.update({
+		otp: hashSecret(code),
+		otp_expires_at: new Date(Date.now() + config.otp.expirationMinutes * 60 * 1000),
+		otp_attempts: 0,
+	});
+	await sendForgotPasswordOTP(email, code);
+	return true;
 };
 
-const verifyOTP = async (email, otp, otp_type) => {
-	try {
-		if (!email || !otp) {
-			throw new ApiError(
-				httpStatus.BAD_REQUEST,
-				"Please Enter Required Fields : [email, otp]",
-			);
-		}
-
-		const user = await Admin.findOne({ where: { email: email } });
-		if (!user) {
-			throw new ApiError(httpStatus.NOT_FOUND, "Invalid Email");
-		}
-
-		if (otp !== user.otp || user.is_otp_valid === false) {
-			throw new ApiError(httpStatus.NOT_FOUND, "Invalid OTP Entered");
-		}
-		let token = "";
-		if (otp_type === otpTypes.FORGOT_PASSWORD) {
-			token = jwt.sign(
-				{
-					id: user.id,
-					role_id: user.role_id,
-					department_id: user.department_id,
-					is_backlisted: false,
-				},
-				Buffer.from(config.jwt.secret, "hex"),
-				{ algorithm: "HS256", expiresIn: "1d" },
-			);
-			user.remember_token = token;
-		}
-		user.is_otp_valid = false;
-		await user.save();
-		return token ? { token } : "";
-	} catch (error) {
+// Admin OTPs are only used for password reset: a correct code returns a short-lived reset token
+const verifyOTP = async (email, otp) => {
+	if (!email || !otp) {
 		throw new ApiError(
-			error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
-			error.message,
+			httpStatus.BAD_REQUEST,
+			"Please Enter Required Fields : [email, otp]",
 		);
 	}
+
+	const user = await Admin.findOne({ where: { email: email, is_active: true } });
+	const usable =
+		user &&
+		user.otp &&
+		user.is_otp_valid &&
+		user.otp_expires_at &&
+		user.otp_expires_at > new Date() &&
+		user.otp_attempts < config.otp.maxAttempts;
+	if (!usable) {
+		throw new ApiError(httpStatus.BAD_REQUEST, "Invalid or expired OTP. Please request a new one.");
+	}
+
+	if (!matchesHash(String(otp).trim(), user.otp)) {
+		const attempts = user.otp_attempts + 1;
+		if (attempts >= config.otp.maxAttempts) {
+			await user.update({ otp: null, otp_attempts: attempts });
+			throw new ApiError(
+				httpStatus.BAD_REQUEST,
+				"Too many incorrect attempts. Please request a new OTP.",
+			);
+		}
+		await user.update({ otp_attempts: attempts });
+		throw new ApiError(httpStatus.BAD_REQUEST, "Invalid OTP Entered");
+	}
+
+	const token = generateResetToken();
+	await user.update({
+		otp: null,
+		otp_expires_at: null,
+		otp_attempts: 0,
+		remember_token: hashSecret(token),
+		reset_token_expires_at: new Date(Date.now() + config.otp.resetTokenExpirationMinutes * 60 * 1000),
+	});
+	return { token };
 };
 
 const forgotAdminPassword = async (reqBody) => {
-	try {
-		const { email, password, confirm_password, token } = reqBody;
-		if (!email || !password || !confirm_password || !token) {
-			throw new ApiError(
-				httpStatus.BAD_REQUEST,
-				"Please Enter Required Fields : [ email, password, confirm_password, token ]",
-			);
-		}
-
-		const user = await Admin.findOne({
-			where: { email: email, remember_token: token, is_active: true },
-		});
-		if (!user) {
-			throw new ApiError(httpStatus.NOT_FOUND, "Invalid Email or Token");
-		}
-
-		if (password !== confirm_password) {
-			throw new ApiError(
-				httpStatus.BAD_REQUEST,
-				"New Password and Confirm Password Must Be Equal",
-			);
-		}
-
-		let salt = bcrypt.genSaltSync(10);
-		const userObj = {
-			password: bcrypt.hashSync(confirm_password, salt),
-			remember_token: null,
-		};
-
-		const isUserPasswordUpdate = await Admin.update(userObj, {
-			where: { id: user?.id },
-		});
-
-		if (!isUserPasswordUpdate) {
-			throw new ApiError(
-				httpStatus.INTERNAL_SERVER_ERROR,
-				"Failed to Change Password.",
-			);
-		}
-		return "Password Changed Successfully.";
-	} catch (error) {
+	const { email, password, confirm_password, token } = reqBody;
+	if (!email || !password || !confirm_password || !token) {
 		throw new ApiError(
-			error.statusCode ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
-			error.message,
+			httpStatus.BAD_REQUEST,
+			"Please Enter Required Fields : [ email, password, confirm_password, token ]",
 		);
 	}
+	if (password !== confirm_password) {
+		throw new ApiError(
+			httpStatus.BAD_REQUEST,
+			"New Password and Confirm Password Must Be Equal",
+		);
+	}
+	if (!validatePassword(password)) {
+		throw new ApiError(
+			httpStatus.BAD_REQUEST,
+			"Password should have a minimum length of 8 characters and must have at least 2 digits and No Blank Space",
+		);
+	}
+
+	const user = await Admin.findOne({ where: { email: email, is_active: true } });
+	const valid =
+		user &&
+		user.reset_token_expires_at &&
+		user.reset_token_expires_at > new Date() &&
+		matchesHash(String(token), user.remember_token);
+	if (!valid) {
+		throw new ApiError(httpStatus.BAD_REQUEST, "Invalid Email or Token");
+	}
+
+	await user.update({
+		password: await bcrypt.hash(password, 10),
+		remember_token: null,
+		reset_token_expires_at: null,
+		password_changed_at: new Date(),
+	});
+	return "Password Changed Successfully.";
 };
 
 const getProfile = async (reqBody) => {
-	try {
-		const { user } = reqBody;
-		const result = await Admin.findOne({
-			attributes: ["id", "name", "email", "role_id", "department_id"],
-			include: [
-				{
-					model: Role,
-					as: "admin_role",
-					attributes: ["id", "name", "abbreviation"],
-				},
-				{
-					model: Department,
-					as: "admin_department",
-					attributes: ["id", "name"],
-				},
-			],
-			where: { id: user.id, is_active: true },
-		});
+	const { user } = reqBody;
+	const result = await Admin.findOne({
+		attributes: ["id", "name", "email", "role_id", "department_id"],
+		include: profileInclude,
+		where: { id: user.id, is_active: true },
+	});
 
-		if (!result) {
-			throw new ApiError(httpStatus.BAD_REQUEST, "Admin profile not found.");
-		}
-
-		return result;
-	} catch (error) {
-		throw new ApiError(
-			error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
-			error.message || "Failed to fetch admin profile",
-		);
+	if (!result) {
+		throw new ApiError(httpStatus.BAD_REQUEST, "Admin profile not found.");
 	}
+
+	return result;
 };
 
 module.exports = {

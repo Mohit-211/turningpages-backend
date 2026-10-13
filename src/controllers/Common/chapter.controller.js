@@ -48,7 +48,7 @@ const removeChapter = catchAsync(async (req, res) => {
 });
 
 const removeBookCover = catchAsync(async (req, res) => {
-	await chapterService.removeBookCover(req.params.id);
+	await chapterService.removeBookCover(req.params.id, req.body);
 	return responseWrapper(res, "", "Cover Deleted successfully.");
 });
 
@@ -113,6 +113,7 @@ const createConversation = catchAsync(async (req, res) => {
 const getConversationMessages = catchAsync(async (req, res) => {
 	const data = await chapterService.getConversationMessages(
 		req.params.id,
+		req.body.user,
 	);
 
 	return responseWrapper(

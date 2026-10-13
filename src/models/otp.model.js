@@ -1,6 +1,7 @@
 const { Sequelize, DataTypes, Model, ENUM } = require('sequelize');
 const sequelize = require('../config/central.db');
 const { otpTypes } = require('../config/types');
+const config = require('../config/config');
 
 class OTP extends Model { }
 OTP.init({
@@ -39,6 +40,11 @@ OTP.init({
         type: DataTypes.DATE,
         allowNull: false
     },
+    attempts: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0
+    },
     is_verified: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
@@ -75,10 +81,11 @@ OTP.init({
     deletedAt: 'deleted_at'
 });
 
+// Set the expiry once, at creation; later saves (attempt counts, verification) must not extend it
 OTP.beforeValidate(async (OTP) => {
-    const expirationTime = new Date();
-    expirationTime.setMinutes(expirationTime.getMinutes() + 5);
-    OTP.otp_expiration_time = expirationTime;
+    if (!OTP.otp_expiration_time) {
+        OTP.otp_expiration_time = new Date(Date.now() + config.otp.expirationMinutes * 60 * 1000);
+    }
 });
 
 OTP.beforeUpdate(async (OTP) => {

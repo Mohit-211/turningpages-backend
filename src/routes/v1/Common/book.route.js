@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const { bookController } = require('../../../controllers');
-const { userAuthMiddleware } = require('../../../middlewares');
+const { userAuthMiddleware, adminAuthMiddleware } = require('../../../middlewares');
 
 router.post('/', [userAuthMiddleware.verifyAuthJWTToken], bookController.createBook);
 router.put('/', [userAuthMiddleware.verifyAuthJWTToken], bookController.updateBook);
@@ -23,10 +23,10 @@ router.post('/chapter/summerize', [userAuthMiddleware.verifyAuthJWTToken], bookC
 
 
 // admin api
-router.post('/plagiarism/check/admin', bookController.checkPlagiarismAdmin);
-router.post('/chapter/summerize/admin', bookController.generateChapterSummaryAdmin);
-router.post('/fact/check/admin',bookController.factCheckingForChapterAdmin);
-router.post('/consistency/check/admin', bookController.bookConsistencyCheckAdmin);
+router.post('/plagiarism/check/admin', [adminAuthMiddleware.validateJWTtoken], bookController.checkPlagiarismAdmin);
+router.post('/chapter/summerize/admin', [adminAuthMiddleware.validateJWTtoken], bookController.generateChapterSummaryAdmin);
+router.post('/fact/check/admin', [adminAuthMiddleware.validateJWTtoken], bookController.factCheckingForChapterAdmin);
+router.post('/consistency/check/admin', [adminAuthMiddleware.validateJWTtoken], bookController.bookConsistencyCheckAdmin);
 
 
 module.exports = router;

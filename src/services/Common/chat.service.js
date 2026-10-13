@@ -14,6 +14,7 @@ const { chatTypes } = require("../../models/chatRoom.model");
 const { participantRoles } = require("../../models/chatParticipant.model");
 const ApiError = require("../../utils/ApiError");
 const sequelize = require("../../config/central.db");
+const config = require("../../config/config");
 
 const { firestore } = require("../../config/firebase");
 const { Sequelize, Op } = require("sequelize");
@@ -66,7 +67,7 @@ const createAdminUserChat = async (adminId, userId) => {
 };
 
 const sendMessage = async (chat_room_id, senderId, role, message) => {
-	let roleId = "6";
+	let roleId = String(config.USR_ROLE_ID);
 	if (role === "user") {
 		const userDoc = await User.findByPk(senderId);
 		roleId = userDoc.role_id;
@@ -75,8 +76,13 @@ const sendMessage = async (chat_room_id, senderId, role, message) => {
 		roleId = userDoc.role_id;
 	}
 
+	// Users and admins have separate id sequences, so the participant role must match the sender type
 	const participant = await ChatParticipant.findOne({
-		where: { chat_room_id: chat_room_id, user_id: senderId },
+		where: {
+			chat_room_id: chat_room_id,
+			user_id: senderId,
+			role: role === "admin" ? [participantRoles.ADMIN, participantRoles.EDITOR] : participantRoles.USER,
+		},
 	});
 
 	if (!participant) {
@@ -139,7 +145,7 @@ const sendMessage = async (chat_room_id, senderId, role, message) => {
 
 const createBookChat = async (bookId, userId, transaction) => {
 	const admins = await Admin.findAll({
-		where: { role_id: 1 },
+		where: { role_id: config.SUP_ADM_ROLE_ID },
 		attributes: ["id"],
 		transaction,
 	});
@@ -248,7 +254,22 @@ const getUserChats = async (body) => {
 	}
 };
 
-const getChatParticipants = async (chatId) => {
+// Only members of the chat (or a super admin) may list its participants
+const getChatParticipants = async (chatId, { user, authType }) => {
+	const isSuperAdmin = authType === "admin" && user.role_id === config.SUP_ADM_ROLE_ID;
+	if (!isSuperAdmin) {
+		const membership = await ChatParticipant.findOne({
+			where: {
+				chat_room_id: chatId,
+				user_id: user.id,
+				role: authType === "admin" ? [participantRoles.ADMIN, participantRoles.EDITOR] : participantRoles.USER,
+			},
+		});
+		if (!membership) {
+			throw new ApiError(httpStatus.FORBIDDEN, "Not allowed");
+		}
+	}
+
 	return await ChatParticipant.findAll({
 		where: { chat_room_id: chatId },
 

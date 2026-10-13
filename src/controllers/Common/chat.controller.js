@@ -27,7 +27,7 @@ const getMyChats = catchAsync(async (req, res) => {
 });
 
 const getParticipants = catchAsync(async (req, res) => {
-    const participants = await chatService.getChatParticipants(req.params.id);
+    const participants = await chatService.getChatParticipants(req.params.id, req.body);
     return responseWrapper(res, participants, '');
 });
 

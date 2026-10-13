@@ -46,7 +46,7 @@ const sendEmailVerification = async (to, otp) => {
 		};
 		transport.sendMail(message, (error, info) => {
 			if (error) {
-				console.log("Email sent error:  ", error);
+				console.log("Email send error:", error.message);
 				return false;
 			} else {
 				return true;
@@ -71,7 +71,7 @@ const sendForgotPasswordOTP = async (to, otp) => {
 		};
 		transport.sendMail(message, (error, info) => {
 			if (error) {
-				console.log("Email sent error:  ", error);
+				console.log("Email send error:", error.message);
 				return false;
 			} else {
 				return true;
@@ -98,7 +98,7 @@ const sendUserCredentials = async (to, password) => {
     Password: ${password}
     
     Remember to keep these details safe and secure! 
-    If you have any issues or have additional questions, please send an email to cedrick.lafleur2@gmail.com
+    If you have any issues or have additional questions, please send an email to ${config.email.supportAddress}
     
     Best Regards,
     Turning Pages Team`;
@@ -115,7 +115,7 @@ Thank you for signing up to Turning Pages! We're excited to have you on board.
 
 You can now explore the platform, discover content, and start your journey with us.
 
-If you face any issues or have any questions, feel free to reach out to us at support@turningpages.io.
+If you face any issues or have any questions, feel free to reach out to us at ${config.email.supportAddress}.
 
 Enjoy your Turning Pages experience!
 
@@ -144,7 +144,7 @@ Best Regards,
 Turning Pages System`;
 
 	try {
-		await sendEmail("cedrick.lafleur2@gmail.com", adminSubject, adminText);
+		await sendEmail(config.email.adminNotificationTo, adminSubject, adminText);
 	} catch (err) {
 		console.error("Admin email failed:", err.message);
 	}

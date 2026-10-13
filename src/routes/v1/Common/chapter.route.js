@@ -6,12 +6,18 @@ const router = express.Router();
 const { Op } = require("sequelize");
 
 const { chapterController } = require("../../../controllers");
-const { userAuthMiddleware } = require("../../../middlewares");
+const {
+  userAuthMiddleware,
+  adminAuthMiddleware,
+  anyAuthMiddleware,
+} = require("../../../middlewares");
 const { Chapter, Book, Genre, User, UserCreditSpending } = require("../../../models");
 const {
   systemInstructionForChapter,
   ai,
-} = require("../../../config/gemeniConfig");
+  ThinkingLevel,
+  extractFinalImage,
+} = require("../../../config/geminiConfig");
 const responseWrapper = require("../../../config/responseWrapper");
 const { status: httpStatus } = require("http-status");
 const path = require("path");
@@ -44,7 +50,6 @@ const generateChapterContent = async (req, res) => {
   let transaction;
   try {
     const { user } = req.body;
-    transaction = await sequelize.transaction();
     const { chapter_id, instruction = "", words_count = 1000 } = req.body;
 
     if (!chapter_id || !instruction?.trim()) {
@@ -69,7 +74,9 @@ const generateChapterContent = async (req, res) => {
         httpStatus.BAD_REQUEST,
       );
 
-    const bookDoc = await Book.findByPk(chapterDoc.book_id, {
+    // The chapter's book must belong to the caller
+    const bookDoc = await Book.findOne({
+      where: { id: chapterDoc.book_id, user_id: user.id, is_active: 1 },
       attributes: ["id", "title", "description", "genre_id"],
       include: [{ model: Genre, as: "book_genre", attributes: ["title"] }],
     });
@@ -83,9 +90,8 @@ const generateChapterContent = async (req, res) => {
       );
 
     // ==================== CREDIT DEDUCTION ====================
-
-    console.log("req.user:", req.user);
-    console.log("req.body:", req.body);
+    // Opened only after validation so early returns never leave a transaction open
+    transaction = await sequelize.transaction();
 
     const userDoc = await User.findByPk(user.id, { transaction });
 
@@ -117,7 +123,6 @@ const generateChapterContent = async (req, res) => {
     );
 
     const genreName = bookDoc.book_genre?.title || "Fiction";
-    const genreLower = genreName.toLowerCase();
 
     const previousChapters = await Chapter.findAll({
       where: { book_id: chapterDoc.book_id, id: { [Op.lt]: chapter_id } },
@@ -181,22 +186,15 @@ ${instruction}
 Write at least ${words_count} words. Do not stop early. Keep writing until you clearly reach ${words_count} words.
 `;
 
-    // Temperature
-    const temperature =
-      genreLower.includes("mystery") ||
-      genreLower.includes("thriller") ||
-      genreLower.includes("non-fiction")
-        ? 0.55
-        : 0.75;
-
+    // Gemini 3 is tuned for its default temperature (1.0); lower values can cause repetition and looping.
+    // Low thinking keeps latency and cost down for long-form writing.
     const response = await ai.models.generateContentStream({
-      model: "gemini-2.5-flash",
+      model: config.models.geminiText,
       contents: basePrompt,
       config: {
         systemInstruction: systemInstructionForChapter,
-        temperature: temperature,
-        topP: 0.85,
         maxOutputTokens: 16000,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
       },
     });
 
@@ -240,7 +238,7 @@ Write at least ${words_count} words. Do not stop early. Keep writing until you c
     if (transaction) {
       await transaction.rollback();
     }
-    console.error("Chapter generation error:", error);
+    console.error("Chapter generation error:", error.message);
     if (!res.headersSent) {
       return responseWrapper(
         res,
@@ -255,6 +253,25 @@ Write at least ${words_count} words. Do not stop early. Keep writing until you c
       res.end();
     }
   }
+};
+
+// Aspect ratios accepted by the Gemini image models
+const COVER_ASPECT_RATIOS = ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"];
+
+// A "WIDTHxHEIGHT" size picks the closest supported ratio; otherwise the direction decides (portrait 2:3 by default)
+const coverAspectRatio = (size, direction) => {
+  const match = /^(\d+)\s*x\s*(\d+)$/i.exec(String(size));
+  if (match && Number(match[2]) > 0) {
+    const target = Number(match[1]) / Number(match[2]);
+    return COVER_ASPECT_RATIOS.reduce((best, ratio) => {
+      const [w, h] = ratio.split(":").map(Number);
+      const [bw, bh] = best.split(":").map(Number);
+      return Math.abs(w / h - target) < Math.abs(bw / bh - target) ? ratio : best;
+    });
+  }
+  if (direction === "horizontal") return "3:2";
+  if (direction === "square") return "1:1";
+  return "2:3";
 };
 
 const generateBookCover = async (req, res) => {
@@ -315,14 +332,31 @@ Return ONLY the final image.
 `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image", // works for images
+      model: config.models.geminiImage,
       contents: prompt,
+      config: {
+        responseModalities: ["TEXT", "IMAGE"],
+        imageConfig: {
+          aspectRatio: coverAspectRatio(size, direction),
+          imageSize: config.geminiImageSize,
+        },
+      },
     });
-    const base64Image = response.data;
-    const buffer = Buffer.from(base64Image, "base64");
-    const fileName = `book_cover_${Date.now()}.png`;
+
+    const image = extractFinalImage(response);
+    if (!image) {
+      return responseWrapper(
+        res,
+        null,
+        "The image model did not return a cover. Please try again.",
+        httpStatus.BAD_GATEWAY,
+      );
+    }
+
+    const extension = { "image/jpeg": "jpg", "image/webp": "webp" }[image.mimeType] || "png";
+    const fileName = `book_cover_${Date.now()}.${extension}`;
     const filePath = path.join(config.STORAGE_DIR, "images", fileName);
-    fs.writeFileSync(filePath, buffer);
+    fs.writeFileSync(filePath, Buffer.from(image.data, "base64"));
 
     return res.status(200).json({
       success: true,
@@ -331,7 +365,7 @@ Return ONLY the final image.
       // https://api.turningpages.io:9090/images/book_cover_1765433209487.png
     });
   } catch (error) {
-    console.error("Error generating book cover:", error);
+    console.error("Error generating book cover:", error.message);
     return responseWrapper(
       res,
       null,
@@ -347,9 +381,9 @@ router.post(
   generateChapterContent,
 );
 
-router.post("/generate/cover", generateBookCover);
+router.post("/generate/cover", [anyAuthMiddleware.verifyUserOrAdmin], generateBookCover);
 
-router.post("/cover/remove/:id", chapterController.removeBookCover);
+router.post("/cover/remove/:id", [anyAuthMiddleware.verifyUserOrAdmin], chapterController.removeBookCover);
 
 // chat assistant routes
 router.post(
@@ -375,8 +409,8 @@ router.get(
 
 // admin apis
 
-router.post("/create/admin", chapterController.createChapterAdmin);
-router.patch("/update/admin", chapterController.updateChapterAdmin);
-router.delete("/remove/admin/:id", chapterController.removeChapterAdmin);
+router.post("/create/admin", [adminAuthMiddleware.validateJWTtoken], chapterController.createChapterAdmin);
+router.patch("/update/admin", [adminAuthMiddleware.validateJWTtoken], chapterController.updateChapterAdmin);
+router.delete("/remove/admin/:id", [adminAuthMiddleware.validateJWTtoken], chapterController.removeChapterAdmin);
 
 module.exports = router;

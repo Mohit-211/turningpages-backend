@@ -1,8 +1,8 @@
 const express = require("express");
 const { tavController } = require("../../../controllers/Common");
-const { userAuthMiddleware } = require("../../../middlewares");
+const { anyAuthMiddleware } = require("../../../middlewares");
 const router = express.Router();
 
-router.post("/run-analysis", tavController.runTavAnalysis);
+router.post("/run-analysis", [anyAuthMiddleware.verifyUserOrAdmin], tavController.runTavAnalysis);
 
 module.exports = router;

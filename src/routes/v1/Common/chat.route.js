@@ -7,6 +7,7 @@ const { chatController } = require("../../../controllers");
 const {
 	adminAuthMiddleware,
 	userAuthMiddleware,
+	anyAuthMiddleware,
 } = require("../../../middlewares");
 
 // Admin creates chat
@@ -33,6 +34,7 @@ router.get(
 // Get participants
 router.get(
 	"/:id/participants",
+	anyAuthMiddleware.verifyUserOrAdmin,
 	chatController.getParticipants,
 );
 

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const { quoteController } = require('../../../controllers');
-const { userAuthMiddleware, adminAuthMiddleware } = require('../../../middlewares');
+const { adminAuthMiddleware } = require('../../../middlewares');
 
 /**
  * ===============================

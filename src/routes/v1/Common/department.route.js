@@ -2,11 +2,15 @@ const express = require('express');
 const router = express.Router();
 
 const { departmentController } = require('../../../controllers');
+const { adminAuthMiddleware } = require('../../../middlewares');
 
-router.post('/', departmentController.createDepartment);
-router.get('/', departmentController.getAllDeparments);
-router.get('/:id', departmentController.findDepartmentById);
-router.put('/:id', departmentController.updateDepartment);
-router.delete('/:id', departmentController.deleteDepartment);
+const anyAdmin = [adminAuthMiddleware.validateJWTtoken];
+const superAdmin = [adminAuthMiddleware.validateJWTtoken, adminAuthMiddleware.isSuperAdmin];
+
+router.post('/', superAdmin, departmentController.createDepartment);
+router.get('/', anyAdmin, departmentController.getAllDeparments);
+router.get('/:id', anyAdmin, departmentController.findDepartmentById);
+router.put('/:id', superAdmin, departmentController.updateDepartment);
+router.delete('/:id', superAdmin, departmentController.deleteDepartment);
 
 module.exports = router;

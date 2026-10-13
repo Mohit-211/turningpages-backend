@@ -4,6 +4,7 @@ const logger = require('./logger.js');
 
 const sequelizeOptions = {
     host: config.databases.central.host,
+    port: config.databases.central.port,
     dialect: 'mysql',
     supportBigNumbers: true,
     collate: 'utf8mb4_unicode_ci',
@@ -12,7 +13,8 @@ const sequelizeOptions = {
         min: 0,
         idle: 10000,
     },
-    logging: config.env === 'production' ? false : console.log
+    // SQL logging prints every query, including token values; enable only for local debugging
+    logging: config.sqlLogging ? console.log : false
 };
 
 //create connection object

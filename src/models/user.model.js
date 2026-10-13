@@ -76,15 +76,6 @@ User.init(
       ],
       defaultValue: userStatusTypes.PENDING,
     },
-    provider: {
-      type: DataTypes.ENUM,
-      values: ["google", "facebook", "apple"],
-      allowNull: true,
-    },
-    provider_id: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
     latitude: {
       type: Sequelize.FLOAT,
       allowNull: true,

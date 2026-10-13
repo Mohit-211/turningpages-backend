@@ -24,7 +24,6 @@ const PACKAGE_PRICES = {
 const getStripePaymentIntent = async (body) => {
   try {
     const { amount, package_name, user } = body;
-    console.log(body, "body");
 
     // ✅ validation
     if (!amount || !package_name) {
@@ -127,7 +126,6 @@ const stripeWebhook = async (body, headers) => {
 
   try {
 console.log("STRIPE EVENT TYPE:", event?.type);
-console.log("STRIPE EVENT DATA:", JSON.stringify(event?.data, null, 2));
 
 if (!event?.data?.object) {
   console.log("Stripe event has no data.object:", event?.type);
@@ -136,8 +134,6 @@ if (!event?.data?.object) {
 
 const data = event.data.object;
 
-console.log(data, "datatttttttttttttttttttttttttttt");
-console.log(event.type, "event.type======================");
 
     switch (event.type) {
       case "payment_intent.payment_failed": {
@@ -369,7 +365,7 @@ console.log(event.type, "event.type======================");
 
     return { received: true };
   } catch (error) {
-    console.error("Stripe webhook processing error:", error);
+    console.error("Stripe webhook processing error:", error.message);
     throw new ApiError(
       httpStatus.INTERNAL_SERVER_ERROR,
       `Webhook handler failed`,

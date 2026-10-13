@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const { feedController } = require('../../../controllers');
-const { userAuthMiddleware } = require('../../../middlewares');
+const { userAuthMiddleware, adminAuthMiddleware } = require('../../../middlewares');
 
 
 /**
@@ -95,11 +95,13 @@ router.get(
 
 router.get(
     '/admin/all',
+    [adminAuthMiddleware.validateJWTtoken],
     feedController.getAllFeeds
 );
 
 router.get(
     '/admin/:feed_id',
+    [adminAuthMiddleware.validateJWTtoken],
     feedController.getFeedByIdForAdmin
 );
 

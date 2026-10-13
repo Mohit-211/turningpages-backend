@@ -20,6 +20,7 @@ const tokenTypes = {
     FORGOT_PASSWORD: 'forgot_password',
     RESET_PASSWORD: 'reset_password',
     SESSION: 'session',
+    ADMIN: 'admin',
 };
 
 const bookStatus = {
